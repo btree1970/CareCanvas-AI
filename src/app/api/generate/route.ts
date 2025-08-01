@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateFormSpec, generateReactForm } from '@/lib/form-generator';
+import { deployLocally, GeneratedProject } from '@/lib/local-deployment';
 import { z } from 'zod';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required'),
+  deployLocally: z.boolean().optional().default(false),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { prompt } = GenerateRequestSchema.parse(body);
+    const { prompt, deployLocally: shouldDeployLocally } = GenerateRequestSchema.parse(body);
 
     console.log('Generating form for prompt:', prompt);
+    console.log('Deploy locally:', shouldDeployLocally);
 
     // Step 1: Generate form specification from natural language
     const formSpec = await generateFormSpec(prompt);
@@ -127,11 +130,34 @@ export function createHealthieClient() {
 NEXT_PUBLIC_HEALTHIE_API_KEY=your_api_key_here`,
     };
 
+    // Step 4: Deploy locally if requested
+    let localProject: GeneratedProject | undefined;
+    
+    if (shouldDeployLocally) {
+      try {
+        console.log('Starting local deployment...');
+        localProject = await deployLocally(formSpec.title, deploymentPackage);
+        console.log('Local deployment successful:', localProject.url);
+      } catch (deployError) {
+        console.error('Local deployment failed:', deployError);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to deploy locally',
+          details: deployError instanceof Error ? deployError.message : 'Unknown deployment error',
+          formSpec,
+          deploymentPackage, // Still return the package for manual use
+        }, { status: 500 });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       formSpec,
       deploymentPackage,
-      message: 'Form generated successfully! Deploy this package to see your form.',
+      localProject,
+      message: localProject 
+        ? `Form generated and deployed locally! Visit ${localProject.url}` 
+        : 'Form generated successfully! Use "Run Locally" to test it.',
     });
 
   } catch (error) {
