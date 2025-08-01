@@ -3,15 +3,17 @@ import { AvatarPicker } from './AvatarPicker';
 import { PainMap } from './PainMap';
 import { PatientDemographics } from './PatientDemographics';
 import { AssessmentScale } from './AssessmentScale';
+import { PatientIntakeForm } from './PatientIntakeForm';
 
 // Re-export for external use
-export { AvatarPicker, PainMap, PatientDemographics, AssessmentScale };
+export { AvatarPicker, PainMap, PatientDemographics, AssessmentScale, PatientIntakeForm };
 
 // For default exports compatibility
 export { default as AvatarPickerDefault } from './AvatarPicker';
 export { default as PainMapDefault } from './PainMap';
 export { default as PatientDemographicsDefault } from './PatientDemographics';
 export { default as AssessmentScaleDefault } from './AssessmentScale';
+export { default as PatientIntakeFormDefault } from './PatientIntakeForm';
 
 // Widget Registry for LLM Context
 export const WIDGET_REGISTRY = {
@@ -94,6 +96,31 @@ export const WIDGET_REGISTRY = {
     ],
     healthie_integration: 'Stores assessment scores and results',
     compliance: 'Uses clinically validated instruments'
+  },
+
+  PatientIntakeForm: {
+    description: 'Comprehensive patient intake form for primary care offices collecting demographics, medical history, and current symptoms',
+    props: {
+      onChange: '(data: PatientIntakeData) => void',
+      value: 'Partial<PatientIntakeData> (optional)',
+      className: 'string (optional)',
+      readOnly: 'boolean (optional)'
+    },
+    use_cases: [
+      'Primary care patient registration',
+      'New patient intake and onboarding',
+      'Comprehensive medical history collection',
+      'Insurance and demographic information gathering'
+    ],
+    clinical_features: [
+      'Demographics collection (name, DOB, contact info)',
+      'Medical history (allergies, medications, conditions)',
+      'Current symptoms assessment',
+      'Vital signs documentation',
+      'Emergency contact information'
+    ],
+    healthie_integration: 'Maps to Healthie patient profile and medical history fields',
+    compliance: 'HIPAA-compliant data collection and storage'
   }
 };
 
@@ -102,7 +129,8 @@ export const WIDGET_COMPONENTS = {
   AvatarPicker,
   PainMap,
   PatientDemographics,
-  AssessmentScale
+  AssessmentScale,
+  PatientIntakeForm
 };
 
 // Helper function to get widget information
