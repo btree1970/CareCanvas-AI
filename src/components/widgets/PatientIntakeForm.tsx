@@ -121,7 +121,7 @@ export function PatientIntakeForm({
 
 	useEffect(() => {
 		onChange(formData);
-	}, [formData, onChange]);
+	}, [formData]); // Remove onChange from dependencies to prevent infinite loop
 
 	const updateField = (field: keyof PatientIntakeData, value: any) => {
 		setFormData(prev => ({

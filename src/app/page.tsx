@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+
 interface GeneratedProject {
 	id: string;
 	name: string;
@@ -173,14 +174,14 @@ export default function Home() {
 								<span className="text-blue-600">.ai</span>
 							</div>
 						</div>
-						
+
 						{/* Navigation and User Info */}
 						<div className="flex items-center space-x-6">
 							<nav className="flex items-center space-x-6">
 								<a href="/" className="text-blue-600 transition-colors">Home</a>
 								<a href="/my-apps" className="text-gray-700 hover:text-blue-600 transition-colors">My Apps</a>
 							</nav>
-							
+
 							{/* User Menu */}
 							<div className="flex items-center space-x-3">
 								<div className="text-gray-600 bg-white px-3 py-1.5 rounded-full border border-gray-200">
@@ -208,12 +209,12 @@ export default function Home() {
 						<span className="text-gray-800">Create Healthcare Apps with </span>
 						<span className="text-blue-600">AI</span>
 					</h1>
-					
+
 					{/* Tagline */}
 					<p className="text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
 						CareCanvas AI is a free tool that generates EHR-integrated healthcare applications with natural language.
 					</p>
-					
+
 					{/* Feature Highlights */}
 					<div className="flex flex-wrap justify-center gap-6 mb-12">
 						<div className="flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-full border border-blue-200">
@@ -235,7 +236,7 @@ export default function Home() {
 							HIPAA Compliant
 						</div>
 					</div>
-					
+
 					{/* Interactive Hint */}
 					<p className="text-base text-gray-500 mb-12">
 						Describe your healthcare application and get a complete, deployable solution. Try{' '}
@@ -247,7 +248,7 @@ export default function Home() {
 						</button>{' '}
 						✨
 					</p>
-					
+
 					{/* Input Bar */}
 					<div className="max-w-3xl mx-auto">
 						<div className="relative">
@@ -341,23 +342,21 @@ export default function Home() {
 									<div className="space-y-6">
 										{/* Local Project Status */}
 										<div className={`rounded-xl p-6 border ${result.localProject.status === 'running'
-												? 'bg-green-50 border-green-200'
-												: result.localProject.status === 'error'
-													? 'bg-red-50 border-red-200'
-													: 'bg-yellow-50 border-yellow-200'
+											? 'bg-green-50 border-green-200'
+											: result.localProject.status === 'error'
+												? 'bg-red-50 border-red-200'
+												: 'bg-yellow-50 border-yellow-200'
 											}`}>
 											<div className="flex items-center justify-between mb-4">
 												<div className="flex items-center">
-													<div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${
-														result.localProject.status === 'running' ? 'bg-green-100' :
-														result.localProject.status === 'error' ? 'bg-red-100' :
-														'bg-yellow-100'
-													}`}>
-														<svg className={`w-5 h-5 ${
-															result.localProject.status === 'running' ? 'text-green-600' :
-															result.localProject.status === 'error' ? 'text-red-600' :
-															'text-yellow-600'
-														}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${result.localProject.status === 'running' ? 'bg-green-100' :
+															result.localProject.status === 'error' ? 'bg-red-100' :
+																'bg-yellow-100'
+														}`}>
+														<svg className={`w-5 h-5 ${result.localProject.status === 'running' ? 'text-green-600' :
+																result.localProject.status === 'error' ? 'text-red-600' :
+																	'text-yellow-600'
+															}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
 															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
 														</svg>
 													</div>
@@ -367,11 +366,10 @@ export default function Home() {
 																'Setting Up...'}
 													</h4>
 												</div>
-												<span className={`text-sm px-3 py-1 rounded-full border ${
-													result.localProject.status === 'running' ? 'bg-green-100 text-green-800 border-green-200' :
-													result.localProject.status === 'error' ? 'bg-red-100 text-red-800 border-red-200' :
-													'bg-yellow-100 text-yellow-800 border-yellow-200'
-												}`}>
+												<span className={`text-sm px-3 py-1 rounded-full border ${result.localProject.status === 'running' ? 'bg-green-100 text-green-800 border-green-200' :
+														result.localProject.status === 'error' ? 'bg-red-100 text-red-800 border-red-200' :
+															'bg-yellow-100 text-yellow-800 border-yellow-200'
+													}`}>
 													{result.localProject.status}
 												</span>
 											</div>

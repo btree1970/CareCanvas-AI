@@ -71,3 +71,66 @@ export const GET_FORM_ANSWER_GROUPS = gql`
     }
   }
 `;
+
+// Medication management mutations
+export const CREATE_MEDICATION = gql`
+  mutation createMedication($input: createMedicationInput) {
+    createMedication(input: $input) {
+      medication {
+        id
+        name
+        dosage
+        frequency
+        directions
+        active
+        start_date
+        end_date
+        created_at
+      }
+      messages {
+        field
+        message
+      }
+    }
+  }
+`;
+
+export const UPDATE_MEDICATION = gql`
+  mutation updateMedication($input: updateMedicationInput) {
+    updateMedication(input: $input) {
+      medication {
+        id
+        name
+        dosage
+        frequency
+        directions
+        active
+        start_date
+        end_date
+        updated_at
+      }
+      messages {
+        field
+        message
+      }
+    }
+  }
+`;
+
+// Query to get patient medications
+export const GET_MEDICATIONS = gql`
+  query getMedications($userId: ID) {
+    medications(userId: $userId) {
+      id
+      name
+      dosage
+      frequency
+      directions
+      active
+      start_date
+      end_date
+      created_at
+      updated_at
+    }
+  }
+`;
