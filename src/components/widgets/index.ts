@@ -4,9 +4,10 @@ import { PainMap } from './PainMap';
 import { PatientDemographics } from './PatientDemographics';
 import { AssessmentScale } from './AssessmentScale';
 import { PatientIntakeForm } from './PatientIntakeForm';
+import { RefillTracker } from './RefillTracker';
 
 // Re-export for external use
-export { AvatarPicker, PainMap, PatientDemographics, AssessmentScale, PatientIntakeForm };
+export { AvatarPicker, PainMap, PatientDemographics, AssessmentScale, PatientIntakeForm, RefillTracker };
 
 // For default exports compatibility
 export { default as AvatarPickerDefault } from './AvatarPicker';
@@ -14,6 +15,10 @@ export { default as PainMapDefault } from './PainMap';
 export { default as PatientDemographicsDefault } from './PatientDemographics';
 export { default as AssessmentScaleDefault } from './AssessmentScale';
 export { default as PatientIntakeFormDefault } from './PatientIntakeForm';
+export { default as RefillTrackerDefault } from './RefillTracker';
+
+// Export types
+export type { RefillRecord } from './RefillTracker';
 
 // Widget Registry for LLM Context
 export const WIDGET_REGISTRY = {
@@ -121,6 +126,30 @@ export const WIDGET_REGISTRY = {
     ],
     healthie_integration: 'Maps to Healthie patient profile and medical history fields',
     compliance: 'HIPAA-compliant data collection and storage'
+  },
+
+  RefillTracker: {
+    description: 'Practice-wide medication refill tracker that monitors active prescriptions and flags those approaching or past their expected refill date',
+    props: {
+      onChange: '(data: RefillRecord[]) => void',
+      value: 'RefillRecord[] (optional)',
+      className: 'string (optional)',
+      readOnly: 'boolean (optional)'
+    },
+    use_cases: [
+      'Medication management and refill tracking',
+      'Practice-wide prescription monitoring',
+      'Patient medication adherence tracking',
+      'Pharmacy coordination and communication'
+    ],
+    clinical_features: [
+      'Real-time refill status monitoring',
+      'Color-coded status indicators (overdue, due soon, OK)',
+      'Patient medication history tracking',
+      'Summary statistics and alerts'
+    ],
+    healthie_integration: 'Maps to Healthie medication and prescription management',
+    compliance: 'HIPAA-compliant medication data handling'
   }
 };
 
@@ -130,7 +159,8 @@ export const WIDGET_COMPONENTS = {
   PainMap,
   PatientDemographics,
   AssessmentScale,
-  PatientIntakeForm
+  PatientIntakeForm,
+  RefillTracker
 };
 
 // Helper function to get widget information
@@ -159,10 +189,10 @@ ${info.use_cases.map(useCase => `- ${useCase}`).join('\n')}
 
 **Healthcare Integration:**
 - ${info.healthie_integration}
-${info.clinical_coding ? `- Clinical Coding: ${info.clinical_coding}` : ''}
-${info.compliance ? `- Compliance: ${info.compliance}` : ''}
+${'clinical_coding' in info ? `- Clinical Coding: ${info.clinical_coding}` : ''}
+${'compliance' in info ? `- Compliance: ${info.compliance}` : ''}
 
-**Accessibility:** ${info.accessibility || 'Standard accessibility features'}
+**Accessibility:** ${'accessibility' in info ? info.accessibility : 'Standard accessibility features'}
 `;
     })
     .join('\n---\n');
