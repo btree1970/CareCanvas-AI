@@ -124,7 +124,9 @@ class SupabaseInterface {
       }
 
       this.lastAuthResult = data;
-      Logger.info("Sign up successful", { email, userId: data.user?.id });
+      this.currentUser = data.user;
+      Logger.info("Sign up successful", { userId: data.user?.id });
+      // User profile is auto-created by Supabase when auth flow completes
       return data;
     } catch (error) {
       Logger.error("Sign up failed", error, { email });
