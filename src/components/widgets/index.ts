@@ -1,17 +1,17 @@
 // CareCanvas AI Healthcare Widget Library
-import { AvatarPicker } from './AvatarPicker';
-import { PainMap } from './PainMap';
-import { PatientDemographics } from './PatientDemographics';
+// import { AvatarPicker } from './AvatarPicker';
+// import { PainMap } from './PainMap';
+// import { PatientDemographics } from './PatientDemographics';
 import { PatientIntakeForm } from './PatientIntakeForm';
 import { RefillTracker } from './RefillTracker';
 
 // Re-export for external use
-export { AvatarPicker, PainMap, PatientDemographics, PatientIntakeForm, RefillTracker };
+export { PatientIntakeForm, RefillTracker };
 
 // For default exports compatibility
-export { default as AvatarPickerDefault } from './AvatarPicker';
-export { default as PainMapDefault } from './PainMap';
-export { default as PatientDemographicsDefault } from './PatientDemographics';
+// export { default as AvatarPickerDefault } from './AvatarPicker';
+//export { default as PainMapDefault } from './PainMap';
+// export { default as PatientDemographicsDefault } from './PatientDemographics';
 export { default as PatientIntakeFormDefault } from './PatientIntakeForm';
 export { default as RefillTrackerDefault } from './RefillTracker';
 
@@ -130,9 +130,6 @@ export const WIDGET_REGISTRY = {
 
 // Widget Component Map for Dynamic Loading
 export const WIDGET_COMPONENTS = {
-	AvatarPicker,
-	PainMap,
-	PatientDemographics,
 	PatientIntakeForm,
 	RefillTracker
 };
