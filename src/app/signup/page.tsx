@@ -260,6 +260,9 @@ export default function SignupPage() {
 						{errors.specialty && (
 							<p className="mt-1 text-sm text-red-600">{errors.specialty}</p>
 						)}
+						<p className="mt-1 text-xs text-gray-500">
+							Currently supporting PCP workflows. More specialties coming soon.
+						</p>
 					</div>
 
 					{/* Submit Button */}
