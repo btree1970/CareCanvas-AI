@@ -61,6 +61,8 @@ export async function generateHealthcareApp(userPrompt: string): Promise<string>
   const systemPrompt = `
 You are an expert React developer creating HIPAA-compliant healthcare applications with Healthie EMR integration.
 
+**CRITICAL: Only use healthcare widgets that are specifically relevant to the user's request. Most basic intake forms only need PatientDemographics + regular HTML form fields.**
+
 ${healthieSchemaContext}
 
 ## HEALTHCARE DOMAIN KNOWLEDGE:
@@ -78,26 +80,73 @@ ${generateWidgetDocumentation()}
 
 ## AVAILABLE DEPENDENCIES (ONLY USE THESE):
 - React hooks: useState, useEffect, useMemo
-- Our widgets: { AvatarPicker, PainMap, PatientDemographics, AssessmentScale } from '../components/widgets'
+- Our widgets: { AvatarPicker, PainMap, PatientDemographics, PatientIntakeForm, RefillTracker } from '../components/widgets'
 - Apollo Client: { useMutation } from '@apollo/client'
-- GraphQL: { CREATE_FORM_ANSWER_GROUP } from '../lib/graphql-mutations'
-- Healthie types: { CreateFormAnswerGroupInput, FormAnswerInput } from '../lib/healthie'
+- GraphQL: { CREATE_FORM_ANSWER_GROUP, CREATE_MEDICATION, UPDATE_MEDICATION } from '../lib/graphql-mutations'
+- Healthie types: { CreateFormAnswerGroupInput, FormAnswerInput, MedicationInput } from '../lib/healthie'
+- Widget types: { PatientIntakeData, RefillRecord } from '../components/widgets'
 - Tailwind CSS classes
+
+## WIDGET SELECTION GUIDELINES (CRITICAL):
+**ONLY include widgets that are specifically relevant to the user's request. Do NOT add widgets just because they exist.**
+
+### When to use each widget:
+- **PatientDemographics**: Use for basic intake forms (demographics, contact info, insurance)
+- **PatientIntakeForm**: Use for comprehensive patient intake with full medical history, medications, allergies, symptoms
+- **PainMap**: ONLY for pain assessments, orthopedic visits, post-surgical follow-ups, injury evaluations
+- **AvatarPicker**: ONLY for pediatric forms or when patient engagement is specifically mentioned
+- **RefillTracker**: ONLY for medication management, pharmacy coordination, practice dashboards, refill monitoring
+
+### Examples:
+- "Primary care intake" → PatientDemographics + basic text fields (NO PainMap)
+- "Basic intake form" → PatientDemographics + chief complaint field
+- "Comprehensive patient intake" → PatientIntakeForm (includes demographics, medical history, symptoms, allergies)
+- "New patient intake with medical history" → PatientIntakeForm
+- "Annual physical intake" → PatientIntakeForm
+- "Pain clinic assessment" → PatientDemographics + PainMap
+- "Pediatric intake" → PatientDemographics + AvatarPicker
+- "Children's form" → PatientDemographics + AvatarPicker
+- "Medication refill tracker" → RefillTracker
+- "Practice dashboard for medications" → RefillTracker
+- "Pharmacy coordination form" → RefillTracker
+
+### Common fields for basic intake (use regular HTML inputs):
+- Chief complaint (textarea)
+- Medical history (textarea or checkboxes)
+- Current medications (textarea)
+- Allergies (textarea)
+- Family history (textarea)
+- Review of systems (checkboxes)
+
+### IMPORTANT TYPE USAGE:
+- When using **PatientIntakeForm** widget, use **PatientIntakeData** interface (flat structure with firstName, lastName, etc.)
+- Do NOT use PatientIntakeFormData (that's for Healthie integration only)
+- Widget returns: { firstName: string, lastName: string, address: {...}, ... }
+
+### ARRAY FIELD VALIDATION:
+PatientIntakeForm widget has these ARRAY fields that need special handling:
+- allergies: string[] - validate with: data.allergies?.length > 0
+- medications: string[] - validate with: data.medications?.length > 0  
+- medicalConditions: string[] - validate with: data.medicalConditions?.length > 0
+- surgicalHistory: string[] - validate with: data.surgicalHistory?.length > 0
+- Do NOT use .trim() on array fields!
 
 ## REQUIREMENTS:
 1. Generate a complete React component (TypeScript)
 2. Use proper HIPAA security patterns
 3. Include form validation (inline, simple functions)
 4. Integrate with Healthie via CREATE_FORM_ANSWER_GROUP mutation
-5. Use appropriate healthcare widgets
+5. **Use ONLY widgets that match the clinical context of the request**
 6. Include accessibility features
 7. Handle errors and loading states
 
 ## EXAMPLE STRUCTURE:
 \`\`\`typescript
-import React, { useState, useEffect } from 'react';
+'use client'
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@apollo/client';
-import { AvatarPicker, PainMap, PatientDemographics, AssessmentScale } from '../components/widgets';
+import { PatientDemographics, PatientIntakeForm } from '../components/widgets'; // Import only what you need based on the request
 import { CREATE_FORM_ANSWER_GROUP } from '../lib/graphql-mutations';
 import { CreateFormAnswerGroupInput } from '../lib/healthie';
 
@@ -114,15 +163,15 @@ const MyHealthcareForm: React.FC = () => {
   const validateEmail = (email: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
   const validatePhone = (phone: string) => /^[\\d\\s\\-\\(\\)\\+]{10,}$/.test(phone);
   
-  // Field change handler
-  const handleFieldChange = (fieldId: string, value: any) => {
+  // Field change handler (wrapped in useCallback to prevent infinite re-renders)
+  const handleFieldChange = useCallback((fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
     
     // Clear errors when user starts typing
     if (errors[fieldId]) {
       setErrors(prev => ({ ...prev, [fieldId]: '' }));
     }
-  };
+  }, [errors]);
   
   // Get field label for Healthie submission
   const getFieldLabel = (fieldId: string): string => {

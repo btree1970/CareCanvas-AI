@@ -6,81 +6,81 @@ import fs from 'fs';
 import path from 'path';
 
 const GenerateRequestSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required'),
-  deployLocally: z.boolean().optional().default(false),
+	prompt: z.string().min(1, 'Prompt is required'),
+	deployLocally: z.boolean().optional().default(false),
 });
 
 // Function to read widget files for deployment
 function getWidgetFiles(): Record<string, string> {
-  const widgetFiles: Record<string, string> = {};
-  const widgetsDir = path.join(process.cwd(), 'src/components/widgets');
-  
-  const widgetNames = ['AvatarPicker.tsx', 'PainMap.tsx', 'PatientDemographics.tsx', 'AssessmentScale.tsx', 'index.ts'];
-  
-  for (const fileName of widgetNames) {
-    try {
-      const filePath = path.join(widgetsDir, fileName);
-      if (fs.existsSync(filePath)) {
-        widgetFiles[`src/components/widgets/${fileName}`] = fs.readFileSync(filePath, 'utf-8');
-      }
-    } catch (error) {
-      console.warn(`Could not read widget file ${fileName}:`, error);
-    }
-  }
-  
-  return widgetFiles;
+	const widgetFiles: Record<string, string> = {};
+	const widgetsDir = path.join(process.cwd(), 'src/components/widgets');
+
+	const widgetNames = ['AvatarPicker.tsx', 'PainMap.tsx', 'PatientDemographics.tsx', 'PatientIntakeForm.tsx', 'RefillTracker.tsx', 'index.ts'];
+
+	for (const fileName of widgetNames) {
+		try {
+			const filePath = path.join(widgetsDir, fileName);
+			if (fs.existsSync(filePath)) {
+				widgetFiles[`src/components/widgets/${fileName}`] = fs.readFileSync(filePath, 'utf-8');
+			}
+		} catch (error) {
+			console.warn(`Could not read widget file ${fileName}:`, error);
+		}
+	}
+
+	return widgetFiles;
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { prompt, deployLocally: shouldDeployLocally } = GenerateRequestSchema.parse(body);
+	try {
+		const body = await request.json();
+		const { prompt, deployLocally: shouldDeployLocally } = GenerateRequestSchema.parse(body);
 
-    console.log('Generating healthcare app for prompt:', prompt);
-    console.log('Deploy locally:', shouldDeployLocally);
+		console.log('Generating healthcare app for prompt:', prompt);
+		console.log('Deploy locally:', true);
 
-    // Single step: Generate React healthcare application
-    const reactCode = await generateHealthcareApp(prompt);
-    console.log('Generated React code length:', reactCode.length);
+		// Single step: Generate React healthcare application
+		const reactCode = await generateHealthcareApp(prompt);
+		console.log('Generated React code length:', reactCode.length);
 
-    // Create a basic form spec for compatibility with deployment
-    const formSpec = {
-      title: `Healthcare Application`,
-      description: `Generated from prompt: ${prompt}`,
-      healthie_form_id: 'generated_healthcare_app',
-      submit_button_text: 'Submit'
-    };
+		// Create a basic form spec for compatibility with deployment
+		const formSpec = {
+			title: `Healthcare Application`,
+			description: `Generated from prompt: ${prompt}`,
+			healthie_form_id: 'generated_healthcare_app',
+			submit_button_text: 'Submit'
+		};
 
-    // Step 3: Create deployment package with real widget files
-    const widgetFiles = getWidgetFiles();
-    const deploymentPackage = {
-      'package.json': JSON.stringify({
-        name: 'carecanvas-generated-form',
-        version: '1.0.0',
-        private: true,
-        scripts: {
-          dev: 'next dev',
-          build: 'next build',
-          start: 'next start',
-        },
-        dependencies: {
-          'next': '^14.0.0',
-          'react': '^18.0.0',
-          'react-dom': '^18.0.0',
-          '@healthie/sdk': '^1.5.0',
-          '@apollo/client': '^3.8.0',
-          'graphql': '^16.8.0',
-        },
-        devDependencies: {
-          '@types/node': '^20.0.0',
-          '@types/react': '^18.0.0',
-          '@types/react-dom': '^18.0.0',
-          'typescript': '^5.0.0',
-          'tailwindcss': '^4',
-          '@tailwindcss/postcss': '^4',
-        },
-      }, null, 2),
-      'next.config.js': `/** @type {import('next').NextConfig} */
+		// Step 3: Create deployment package with real widget files
+		const widgetFiles = getWidgetFiles();
+		const deploymentPackage = {
+			'package.json': JSON.stringify({
+				name: 'carecanvas-generated-form',
+				version: '1.0.0',
+				private: true,
+				scripts: {
+					dev: 'next dev',
+					build: 'next build',
+					start: 'next start',
+				},
+				dependencies: {
+					'next': '^14.0.0',
+					'react': '^18.0.0',
+					'react-dom': '^18.0.0',
+					'@healthie/sdk': '^1.5.0',
+					'@apollo/client': '^3.8.0',
+					'graphql': '^16.8.0',
+				},
+				devDependencies: {
+					'@types/node': '^20.0.0',
+					'@types/react': '^18.0.0',
+					'@types/react-dom': '^18.0.0',
+					'typescript': '^5.0.0',
+					'tailwindcss': '^4',
+					'@tailwindcss/postcss': '^4',
+				},
+			}, null, 2),
+			'next.config.js': `/** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     appDir: true,
@@ -88,19 +88,40 @@ const nextConfig = {
 }
 
 module.exports = nextConfig`,
-      'tailwind.config.js': `/** @type {import('tailwindcss').Config} */
+			'tailwind.config.js': `/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
 }`,
-      'postcss.config.js': `module.exports = {
+			'postcss.config.js': `module.exports = {
   plugins: ["@tailwindcss/postcss"],
 }`,
-      'src/app/globals.css': `@tailwind base;
-@tailwind components;
-@tailwind utilities;`,
-      'src/app/layout.tsx': `'use client'
+			'src/app/globals.css': `@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}`,
+			'src/app/layout.tsx': `'use client'
 
 import './globals.css'
 import { ApolloProvider, ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
@@ -114,7 +135,7 @@ try {
   console.error('Failed to initialize Healthie client:', error);
   // Create a minimal Apollo Client for development
   client = new ApolloClient({
-    link: createHttpLink({ uri: 'https://api.gethealthie.com/graphql' }),
+    link: createHttpLink({ uri: 'https://staging-api.gethealthie.com/graphql' }),
     cache: new InMemoryCache(),
     defaultOptions: {
       watchQuery: { errorPolicy: 'ignore' },
@@ -139,8 +160,8 @@ export default function RootLayout({
     </html>
   )
 }`,
-      'src/app/page.tsx': reactCode,
-      'src/lib/healthie.ts': `import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+			'src/app/page.tsx': reactCode,
+			'src/lib/healthie.ts': `import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { z } from 'zod';
 
@@ -165,7 +186,7 @@ export type CreateFormAnswerGroupInput = z.infer<typeof CreateFormAnswerGroupInp
 
 export function createHealthieClient() {
   const httpLink = createHttpLink({
-    uri: process.env.NEXT_PUBLIC_HEALTHIE_API_URL || 'https://api.gethealthie.com/graphql',
+    uri: process.env.NEXT_PUBLIC_HEALTHIE_API_URL || 'https://staging-api.gethealthie.com/graphql',
   });
 
   const authLink = setContext((_, { headers }) => {
@@ -173,7 +194,8 @@ export function createHealthieClient() {
     
     // Only add authorization if API key is present
     if (!apiKey) {
-      console.warn('NEXT_PUBLIC_HEALTHIE_API_KEY not found. Healthie integration will not work.');
+      console.warn('⚠️  NEXT_PUBLIC_HEALTHIE_API_KEY not found. Please check .env.local file.');
+      console.log('📖 Setup instructions: https://staging.gethealthie.com/admin/api_keys');
       return { headers };
     }
     
@@ -203,7 +225,7 @@ export function createHealthieClient() {
     },
   });
 }`,
-      'src/lib/graphql-mutations.ts': `import { gql } from '@apollo/client';
+			'src/lib/graphql-mutations.ts': `import { gql } from '@apollo/client';
 
 // Healthie GraphQL mutation for creating form answer groups
 export const CREATE_FORM_ANSWER_GROUP = gql\`
@@ -236,9 +258,83 @@ export const CREATE_FORM_ANSWER_GROUP = gql\`
     }
   }
 \`;`,
-      '.env.local': `NEXT_PUBLIC_HEALTHIE_API_URL=https://api.gethealthie.com/graphql
-NEXT_PUBLIC_HEALTHIE_API_KEY=your_api_key_here`,
-      'src/components/widgets/index.ts': `// Healthcare Widget Library
+			'README.md': `# Generated Healthcare Application
+
+This application was generated by CareCanvas AI and integrates with the Healthie healthcare platform.
+
+## Quick Start
+
+1. **Install dependencies:**
+   \\\`\\\`\\\`bash
+   npm install
+   \\\`\\\`\\\`
+
+2. **Configure Healthie API:**
+   ${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY ? 
+   '- ✅ API key automatically inherited from CareCanvas builder' :
+   `- Sign up at [Healthie Staging](https://staging.gethealthie.com)
+   - Go to Admin > API Keys to generate your key
+   - Update \\\`.env.local\\\` with your API key`}
+
+3. **Start development server:**
+   \\\`\\\`\\\`bash
+   npm run dev
+   \\\`\\\`\\\`
+
+4. **Open in browser:**
+   Visit [http://localhost:3000](http://localhost:3000)
+
+## Features
+
+- 🏥 HIPAA-compliant healthcare forms
+- 📊 Clinical assessment tools (PHQ-9, GAD-7)
+- 🗂️ Patient demographics collection
+- 🎯 Interactive pain mapping
+- 👤 Avatar-based patient engagement
+- 🔄 Real-time Healthie EMR integration
+
+## Configuration
+
+${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY ? 
+`🎉 **Ready to use!** API key automatically configured from CareCanvas builder.
+
+Current configuration:
+\\\`\\\`\\\`
+NEXT_PUBLIC_HEALTHIE_API_URL=https://staging-api.gethealthie.com/graphql
+NEXT_PUBLIC_HEALTHIE_API_KEY=${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY.substring(0, 8)}...
+\\\`\\\`\\\`` :
+`Update \\\`.env.local\\\` with your Healthie credentials:
+
+\\\`\\\`\\\`
+NEXT_PUBLIC_HEALTHIE_API_URL=https://staging-api.gethealthie.com/graphql
+NEXT_PUBLIC_HEALTHIE_API_KEY=your_actual_api_key_here
+\\\`\\\`\\\``}
+
+## Healthcare Widgets
+
+This application includes specialized healthcare components:
+
+- **PatientDemographics**: Comprehensive patient intake forms
+- **PainMap**: Interactive body diagram for pain assessment  
+- **AssessmentScale**: Validated clinical questionnaires
+- **AvatarPicker**: Patient engagement and personalization
+
+---
+
+*Generated with ❤️ by [CareCanvas AI](https://carecanvas.ai)*`,
+			'.env.local': `# Healthie API Configuration
+# ${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY ? '✅ API key inherited from CareCanvas builder' : '⚠️  Get your API key from: https://staging.gethealthie.com/admin/api_keys'}
+NEXT_PUBLIC_HEALTHIE_API_URL=https://staging-api.gethealthie.com/graphql
+NEXT_PUBLIC_HEALTHIE_API_KEY=${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY || 'your_api_key_here'}
+
+${process.env.NEXT_PUBLIC_HEALTHIE_API_KEY ? 
+'# API key automatically configured from CareCanvas builder!' : 
+`# Instructions to set up API key:
+# 1. Sign up for Healthie at https://staging.gethealthie.com
+# 2. Go to Admin > API Keys to generate your key
+# 3. Replace 'your_api_key_here' with your actual API key
+# 4. Restart the development server: npm run dev`}`,
+			'src/components/widgets/index.ts': `// Healthcare Widget Library
 'use client'
 
 // Export all widgets with both named and default exports
@@ -254,8 +350,8 @@ export default {
   PatientDemographics,
   AssessmentScale
 };`,
-      // Include actual widget component files
-      'src/components/widgets/AvatarPicker.tsx': `'use client'
+			// Include actual widget component files
+			'src/components/widgets/AvatarPicker.tsx': `'use client'
 
 import React, { useState } from 'react';
 
@@ -353,54 +449,52 @@ export function AvatarPicker({ ageGroup = 'child', onChange, value, className = 
 
 export { AvatarPicker };
 export default AvatarPicker;`,
-      // Dynamic widget files added here
-      ...widgetFiles,
-    };
+			// Dynamic widget files added here
+			...widgetFiles,
+		};
 
-    // Step 4: Deploy locally if requested
-    let localProject: GeneratedProject | undefined;
-    
-    if (shouldDeployLocally) {
-      try {
-        console.log('Starting local deployment...');
-        localProject = await deployLocally(formSpec.title, deploymentPackage);
-        console.log('Local deployment successful:', localProject.url);
-      } catch (deployError) {
-        console.error('Local deployment failed:', deployError);
-        return NextResponse.json({
-          success: false,
-          error: 'Failed to deploy locally',
-          details: deployError instanceof Error ? deployError.message : 'Unknown deployment error',
-          formSpec,
-          deploymentPackage, // Still return the package for manual use
-        }, { status: 500 });
-      }
-    }
+		// Step 4: Deploy locally if requested
+		let localProject: GeneratedProject | undefined;
 
-    return NextResponse.json({
-      success: true,
-      formSpec,
-      deploymentPackage,
-      localProject,
-      message: localProject 
-        ? `Form generated and deployed locally! Visit ${localProject.url}` 
-        : 'Form generated successfully! Use "Run Locally" to test it.',
-    });
+		try {
+			console.log('Starting local deployment...');
+			localProject = await deployLocally(formSpec.title, deploymentPackage);
+			console.log('Local deployment successful:', localProject.url);
+		} catch (deployError) {
+			console.error('Local deployment failed:', deployError);
+			return NextResponse.json({
+				success: false,
+				error: 'Failed to deploy locally',
+				details: deployError instanceof Error ? deployError.message : 'Unknown deployment error',
+				formSpec,
+				deploymentPackage, // Still return the package for manual use
+			}, { status: 500 });
+		}
 
-  } catch (error) {
-    console.error('Error in /api/generate:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({
-        success: false,
-        error: 'Invalid request format',
-        details: error.errors,
-      }, { status: 400 });
-    }
+		return NextResponse.json({
+			success: true,
+			formSpec,
+			deploymentPackage,
+			localProject,
+			message: localProject
+				? `Form generated and deployed locally! Visit ${localProject.url}`
+				: 'Form generated successfully! Use "Run Locally" to test it.',
+		});
 
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-    }, { status: 500 });
-  }
+	} catch (error) {
+		console.error('Error in /api/generate:', error);
+
+		if (error instanceof z.ZodError) {
+			return NextResponse.json({
+				success: false,
+				error: 'Invalid request format',
+				details: error.errors,
+			}, { status: 400 });
+		}
+
+		return NextResponse.json({
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error occurred',
+		}, { status: 500 });
+	}
 }
