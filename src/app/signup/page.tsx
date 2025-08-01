@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SignupForm {
 	email: string;
@@ -33,6 +34,7 @@ const SPECIALTY_OPTIONS = [
 
 export default function SignupPage() {
 	const router = useRouter();
+	const { signUp, loading } = useAuth();
 	const [formData, setFormData] = useState<SignupForm>({
 		email: '',
 		password: '',
@@ -42,7 +44,8 @@ export default function SignupPage() {
 		specialty: ''
 	});
 	const [errors, setErrors] = useState<Partial<SignupForm>>({});
-	const [isLoading, setIsLoading] = useState(false);
+	const [authError, setAuthError] = useState<string>('');
+	const [isSuccess, setIsSuccess] = useState(false);
 
 	const validateForm = (): boolean => {
 		const newErrors: Partial<SignupForm> = {};
@@ -82,28 +85,33 @@ export default function SignupPage() {
 			return;
 		}
 
-		setIsLoading(true);
+		setAuthError('');
 
 		try {
-			// Simulate API call for signup
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			// Sign up using auth context - include clinic data in user metadata
+			const { user } = await signUp(
+				formData.email, 
+				formData.password,
+				formData.clinicName // Use clinic name as the name field
+			);
+			
+			if (user) {
+				// Store additional signup data for later use (EMR, specialty)
+				const signupData = {
+					emr: formData.emr,
+					specialty: formData.specialty,
+					clinicName: formData.clinicName
+				};
+				localStorage.setItem('signupData', JSON.stringify(signupData));
 
-			// Store user data in localStorage (in a real app, you'd use a proper auth system)
-			const userData = {
-				email: formData.email,
-				clinicName: formData.clinicName,
-				emr: formData.emr,
-				specialty: formData.specialty,
-				isLoggedIn: true
-			};
-			localStorage.setItem('userData', JSON.stringify(userData));
-
-			// Redirect to main dashboard
-			router.push('/');
+				// Show success message instead of redirecting
+				setIsSuccess(true);
+			} else {
+				setAuthError('Signup failed. Please try again.');
+			}
 		} catch (error) {
 			console.error('Signup error:', error);
-		} finally {
-			setIsLoading(false);
+			setAuthError(error instanceof Error ? error.message : 'Signup failed. Please try again.');
 		}
 	};
 
@@ -113,6 +121,61 @@ export default function SignupPage() {
 			setErrors(prev => ({ ...prev, [field]: undefined }));
 		}
 	};
+
+	// If signup was successful, show confirmation message
+	if (isSuccess) {
+		return (
+			<div className="min-h-screen bg-white flex items-center justify-center py-12 px-4">
+				<div className="max-w-md w-full space-y-8">
+					{/* Header */}
+					<div className="text-center">
+						<div className="flex justify-center mb-6">
+							<div className="text-3xl font-bold">
+								<span className="text-gray-800">CareCanvas</span>
+								<span className="text-blue-600">.ai</span>
+							</div>
+						</div>
+						<h2 className="text-3xl font-bold text-gray-900 mb-2">
+							Check your email
+						</h2>
+						<p className="text-gray-600 mb-6">
+							We've sent a confirmation link to <strong>{formData.email}</strong>
+						</p>
+					</div>
+
+					{/* Success Message */}
+					<div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+						<div className="text-green-600 text-5xl mb-4">✓</div>
+						<h3 className="text-lg font-semibold text-green-800 mb-2">
+							Account Created Successfully!
+						</h3>
+						<p className="text-green-700 mb-4">
+							Please check your email and click the confirmation link to complete your registration.
+						</p>
+						<p className="text-sm text-green-600">
+							Once confirmed, you can <a href="/login" className="font-medium underline hover:text-green-800">sign in to your account</a>.
+						</p>
+					</div>
+
+					{/* Resend Email */}
+					<div className="text-center">
+						<p className="text-sm text-gray-600">
+							Didn't receive an email?{' '}
+							<button 
+								onClick={() => {
+									// Here you could implement resend functionality
+									alert('Resend functionality would be implemented here');
+								}}
+								className="text-blue-600 hover:text-blue-800 font-medium"
+							>
+								Resend confirmation
+							</button>
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="min-h-screen bg-white flex items-center justify-center py-12 px-4">
@@ -265,13 +328,20 @@ export default function SignupPage() {
 						</p>
 					</div>
 
+					{/* Auth Error */}
+					{authError && (
+						<div className="bg-red-50 border border-red-200 rounded-lg p-3">
+							<p className="text-sm text-red-700">{authError}</p>
+						</div>
+					)}
+
 					{/* Submit Button */}
 					<button
 						type="submit"
-						disabled={isLoading}
+						disabled={loading}
 						className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
 					>
-						{isLoading ? 'Creating account...' : 'Create account'}
+						{loading ? 'Creating account...' : 'Create account'}
 					</button>
 				</form>
 
