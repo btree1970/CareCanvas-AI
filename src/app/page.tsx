@@ -2,39 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AssessmentScale } from '@/components/widgets';
-
-// AssessmentScale Demo Component
-function AssessmentScaleDemo() {
-	const [responses, setResponses] = useState<Record<string, number>>({});
-	const [result, setResult] = useState<any>(null);
-
-	const handleAssessmentChange = (responses: Record<string, number>, result: any) => {
-		setResponses(responses);
-		setResult(result);
-		console.log('Assessment completed:', { responses, result });
-	};
-
-	return (
-		<div className="space-y-4">
-			<AssessmentScale
-				scaleType="PHQ-9"
-				onChange={handleAssessmentChange}
-				value={responses}
-				className="w-full"
-			/>
-			
-			{result && (
-				<div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-					<h4 className="font-medium text-green-800 mb-2">Assessment Results Logged</h4>
-					<p className="text-sm text-green-700">
-						Check the browser console to see the complete assessment data.
-					</p>
-				</div>
-			)}
-		</div>
-	);
-}
 
 interface GeneratedProject {
 	id: string;
