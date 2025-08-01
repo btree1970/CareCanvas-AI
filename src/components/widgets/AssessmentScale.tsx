@@ -198,48 +198,71 @@ export function AssessmentScale({
 		const result = calculateResult(responses);
 
 		return (
-			<div className={`assessment-results ${className}`}>
-				<div className="bg-white border border-gray-200 rounded-lg p-6">
-					<div className="text-center mb-6">
-						<h3 className="text-xl font-semibold text-gray-800 mb-2">
+			<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>
+				<div className="mb-8">
+					<div className="flex items-center mb-3">
+						<div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+							<svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+						</div>
+						<h3 className="text-xl font-semibold text-gray-900">
 							Assessment Complete
 						</h3>
-						<div className="text-3xl font-bold text-blue-600 mb-2">
+					</div>
+				</div>
+
+				<div className="space-y-6">
+					{/* Score Display */}
+					<div className="text-center p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+						<div className="text-4xl font-bold text-blue-600 mb-2">
 							{result.totalScore} / {questions.length * 3}
 						</div>
-						<p className="text-lg text-gray-600">{result.interpretation}</p>
-					</div>
-
-					<div className="mb-6">
-						<div className={`
-              p-4 rounded-lg border-l-4 
-              ${result.riskLevel === 'minimal' ? 'bg-green-50 border-green-500' : ''}
-              ${result.riskLevel === 'mild' ? 'bg-yellow-50 border-yellow-500' : ''}
-              ${result.riskLevel === 'moderate' ? 'bg-orange-50 border-orange-500' : ''}
-              ${result.riskLevel === 'severe' ? 'bg-red-50 border-red-500' : ''}
-            `}>
-							<h4 className="font-semibold mb-2">Clinical Recommendations:</h4>
-							<ul className="space-y-1">
-								{result.clinicalRecommendations.map((rec, index) => (
-									<li key={index} className="flex items-start">
-										<span className="text-sm mr-2">•</span>
-										<span className="text-sm">{rec}</span>
-									</li>
-								))}
-							</ul>
+						<div className={`inline-block px-4 py-2 rounded-full text-sm font-medium border ${
+							result.riskLevel === 'minimal' ? 'bg-green-100 text-green-800 border-green-200' :
+							result.riskLevel === 'mild' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+							result.riskLevel === 'moderate' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+							'bg-red-100 text-red-800 border-red-200'
+						}`}>
+							{result.interpretation}
 						</div>
 					</div>
 
-					<div className="text-center">
+					{/* Clinical Recommendations */}
+					<div className="space-y-4">
+						<h4 className="text-lg font-medium text-gray-900 flex items-center">
+							<span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
+							Clinical Recommendations
+						</h4>
+						<div className="space-y-3">
+							{result.clinicalRecommendations.map((rec, index) => (
+								<div key={index} className="flex items-start p-4 bg-gray-50 rounded-lg">
+									<div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+									<p className="text-sm text-gray-700">{rec}</p>
+								</div>
+							))}
+						</div>
+					</div>
+
+					{/* Action Buttons */}
+					<div className="flex gap-3 pt-4">
 						<button
 							onClick={() => {
 								setShowResults(false);
 								setCurrentQuestionIndex(0);
 								setResponses({});
 							}}
-							className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800"
+							className="flex-1 px-4 py-3 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
 						>
 							Retake Assessment
+						</button>
+						<button
+							onClick={() => {
+								// Handle save or export
+							}}
+							className="flex-1 px-4 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+						>
+							Save Results
 						</button>
 					</div>
 				</div>
@@ -248,41 +271,53 @@ export function AssessmentScale({
 	}
 
 	return (
-		<div className={`assessment-scale ${className}`}>
-			<div className="mb-6">
-				<h3 className="text-lg font-semibold text-gray-800 mb-2">
-					{scale.title}
-				</h3>
+		<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>
+			<div className="mb-8">
+				<div className="flex items-center mb-3">
+					<div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+						<svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+						</svg>
+					</div>
+					<h3 className="text-xl font-semibold text-gray-900">
+						{scale.title}
+					</h3>
+				</div>
 				<p className="text-sm text-gray-600 mb-4">
 					{scale.description}
 				</p>
 
 				{/* Progress Bar */}
-				<div className="mb-4">
+				<div className="mb-6">
 					<div className="flex justify-between text-sm text-gray-600 mb-2">
 						<span>Progress</span>
 						<span>{Math.round(progress)}%</span>
 					</div>
 					<div className="w-full bg-gray-200 rounded-full h-2">
 						<div
-							className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+							className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
 							style={{ width: `${progress}%` }}
 						></div>
 					</div>
 				</div>
 
-				<p className="text-sm text-gray-700 font-medium mb-4">
+				<p className="text-sm text-gray-700 font-medium mb-6">
 					{scale.timeframe}
 				</p>
 			</div>
 
 			{currentQuestion && (
-				<div className="bg-white border border-gray-200 rounded-lg p-6">
-					<div className="mb-4">
-						<div className="text-sm text-gray-500 mb-2">
-							Question {currentQuestionIndex + 1} of {questions.length}
+				<div className="space-y-6">
+					<div className="space-y-4">
+						<div className="flex items-center justify-between">
+							<div className="text-sm text-gray-500">
+								Question {currentQuestionIndex + 1} of {questions.length}
+							</div>
+							<div className="text-sm text-gray-500">
+								{Math.round((currentQuestionIndex / questions.length) * 100)}% complete
+							</div>
 						</div>
-						<h4 className="text-lg font-medium text-gray-800">
+						<h4 className="text-lg font-medium text-gray-900 leading-relaxed">
 							{currentQuestion.text}
 						</h4>
 					</div>
@@ -293,90 +328,48 @@ export function AssessmentScale({
 								key={option.value}
 								onClick={() => handleResponseChange(currentQuestion.id, option.value)}
 								className={`
-                  w-full text-left p-4 rounded-lg border transition-all
+                  w-full text-left p-4 rounded-lg border transition-all duration-200
                   ${responses[currentQuestion.id] === option.value
-										? 'border-blue-500 bg-blue-50'
-										: 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+										? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+										: 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
 									}
                 `}
 							>
-								<div className="flex items-center">
-									<div className={`
-                    w-4 h-4 rounded-full border-2 mr-3
-                    ${responses[currentQuestion.id] === option.value
-											? 'border-blue-500 bg-blue-500'
-											: 'border-gray-300'
-										}
-                  `}>
-										{responses[currentQuestion.id] === option.value && (
-											<div className="w-full h-full rounded-full bg-white transform scale-50"></div>
-										)}
-									</div>
+								<div className="flex items-center justify-between">
 									<div>
-										<div className="font-medium">{option.label}</div>
+										<div className="font-medium text-gray-900">{option.label}</div>
 										{option.description && (
-											<div className="text-sm text-gray-500">{option.description}</div>
+											<div className="text-sm text-gray-500 mt-1">{option.description}</div>
 										)}
 									</div>
+									{responses[currentQuestion.id] === option.value && (
+										<div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+											<svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+												<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+											</svg>
+										</div>
+									)}
 								</div>
 							</button>
 						))}
 					</div>
 
 					{/* Navigation */}
-					<div className="flex justify-between mt-6">
+					<div className="flex justify-between pt-4">
 						<button
 							onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
 							disabled={currentQuestionIndex === 0}
-							className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 						>
 							Previous
 						</button>
-
-						{currentQuestionIndex < questions.length - 1 ? (
-							<button
-								onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-								disabled={responses[currentQuestion.id] === undefined}
-								className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								Next
-							</button>
-						) : (
-							<button
-								onClick={() => setShowResults(true)}
-								disabled={!isComplete}
-								className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								View Results
-							</button>
-						)}
+						<div className="text-sm text-gray-500">
+							{currentQuestionIndex + 1} of {questions.length}
+						</div>
 					</div>
 				</div>
 			)}
 
-			{/* Question Overview */}
-			<div className="mt-6">
-				<h4 className="text-sm font-medium text-gray-700 mb-3">Question Overview</h4>
-				<div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-					{questions.map((_, index) => (
-						<button
-							key={index}
-							onClick={() => setCurrentQuestionIndex(index)}
-							className={`
-                w-full aspect-square rounded-lg text-sm font-medium transition-all
-                ${responses[questions[index].id] !== undefined
-									? 'bg-green-500 text-white'
-									: index === currentQuestionIndex
-										? 'bg-blue-500 text-white'
-										: 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-								}
-              `}
-						>
-							{index + 1}
-						</button>
-					))}
-				</div>
-			</div>
 		</div>
 	);
 }
