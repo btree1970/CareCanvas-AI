@@ -1,30 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateFormSpec, generateReactForm } from '@/lib/form-generator';
+import { generateHealthcareApp } from '@/lib/form-generator';
 import { deployLocally, GeneratedProject } from '@/lib/local-deployment';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required'),
   deployLocally: z.boolean().optional().default(false),
 });
 
+// Function to read widget files for deployment
+function getWidgetFiles(): Record<string, string> {
+  const widgetFiles: Record<string, string> = {};
+  const widgetsDir = path.join(process.cwd(), 'src/components/widgets');
+  
+  const widgetNames = ['AvatarPicker.tsx', 'PainMap.tsx', 'PatientDemographics.tsx', 'AssessmentScale.tsx', 'index.ts'];
+  
+  for (const fileName of widgetNames) {
+    try {
+      const filePath = path.join(widgetsDir, fileName);
+      if (fs.existsSync(filePath)) {
+        widgetFiles[`src/components/widgets/${fileName}`] = fs.readFileSync(filePath, 'utf-8');
+      }
+    } catch (error) {
+      console.warn(`Could not read widget file ${fileName}:`, error);
+    }
+  }
+  
+  return widgetFiles;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { prompt, deployLocally: shouldDeployLocally } = GenerateRequestSchema.parse(body);
 
-    console.log('Generating form for prompt:', prompt);
+    console.log('Generating healthcare app for prompt:', prompt);
     console.log('Deploy locally:', shouldDeployLocally);
 
-    // Step 1: Generate form specification from natural language
-    const formSpec = await generateFormSpec(prompt);
-    console.log('Generated form spec:', formSpec);
-
-    // Step 2: Generate React code using the form spec
-    const reactCode = await generateReactForm(formSpec);
+    // Single step: Generate React healthcare application
+    const reactCode = await generateHealthcareApp(prompt);
     console.log('Generated React code length:', reactCode.length);
 
-    // Step 3: Create deployment package
+    // Create a basic form spec for compatibility with deployment
+    const formSpec = {
+      title: `Healthcare Application`,
+      description: `Generated from prompt: ${prompt}`,
+      healthie_form_id: 'generated_healthcare_app',
+      submit_button_text: 'Submit'
+    };
+
+    // Step 3: Create deployment package with real widget files
+    const widgetFiles = getWidgetFiles();
     const deploymentPackage = {
       'package.json': JSON.stringify({
         name: 'carecanvas-generated-form',
@@ -48,9 +76,8 @@ export async function POST(request: NextRequest) {
           '@types/react': '^18.0.0',
           '@types/react-dom': '^18.0.0',
           'typescript': '^5.0.0',
-          'tailwindcss': '^3.3.0',
-          'postcss': '^8.4.0',
-          'autoprefixer': '^10.4.0',
+          'tailwindcss': '^4',
+          '@tailwindcss/postcss': '^4',
         },
       }, null, 2),
       'next.config.js': `/** @type {import('next').NextConfig} */
@@ -64,29 +91,37 @@ module.exports = nextConfig`,
       'tailwind.config.js': `/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
 }`,
       'postcss.config.js': `module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
+  plugins: ["@tailwindcss/postcss"],
 }`,
-      'app/globals.css': `@tailwind base;
+      'src/app/globals.css': `@tailwind base;
 @tailwind components;
 @tailwind utilities;`,
-      'app/layout.tsx': `import './globals.css'
+      'src/app/layout.tsx': `'use client'
 
-export const metadata = {
-  title: '${formSpec.title}',
-  description: '${formSpec.description || 'Generated healthcare form'}',
+import './globals.css'
+import { ApolloProvider, ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
+import { createHealthieClient } from '../lib/healthie'
+
+// Initialize Apollo Client with fallback
+let client: ApolloClient<any>;
+try {
+  client = createHealthieClient();
+} catch (error) {
+  console.error('Failed to initialize Healthie client:', error);
+  // Create a minimal Apollo Client for development
+  client = new ApolloClient({
+    link: createHttpLink({ uri: 'https://api.gethealthie.com/graphql' }),
+    cache: new InMemoryCache(),
+    defaultOptions: {
+      watchQuery: { errorPolicy: 'ignore' },
+      query: { errorPolicy: 'ignore' },
+      mutate: { errorPolicy: 'ignore' },
+    },
+  });
 }
 
 export default function RootLayout({
@@ -96,13 +131,37 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ApolloProvider client={client}>
+          {children}
+        </ApolloProvider>
+      </body>
     </html>
   )
 }`,
-      'app/page.tsx': reactCode,
-      'lib/healthie.ts': `import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+      'src/app/page.tsx': reactCode,
+      'src/lib/healthie.ts': `import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { z } from 'zod';
+
+// Healthie API types based on the GraphQL schema we explored
+export const FormAnswerInputSchema = z.object({
+  custom_module_id: z.string(),
+  answer: z.string(),
+  label: z.string().optional(),
+  metadata: z.string().optional(),
+});
+
+export const CreateFormAnswerGroupInputSchema = z.object({
+  user_id: z.string().optional(),
+  custom_module_form_id: z.string(),
+  finished: z.boolean().default(true),
+  form_answers: z.array(FormAnswerInputSchema),
+  metadata: z.string().optional(),
+});
+
+export type FormAnswerInput = z.infer<typeof FormAnswerInputSchema>;
+export type CreateFormAnswerGroupInput = z.infer<typeof CreateFormAnswerGroupInputSchema>;
 
 export function createHealthieClient() {
   const httpLink = createHttpLink({
@@ -111,6 +170,12 @@ export function createHealthieClient() {
 
   const authLink = setContext((_, { headers }) => {
     const apiKey = process.env.NEXT_PUBLIC_HEALTHIE_API_KEY;
+    
+    // Only add authorization if API key is present
+    if (!apiKey) {
+      console.warn('NEXT_PUBLIC_HEALTHIE_API_KEY not found. Healthie integration will not work.');
+      return { headers };
+    }
     
     return {
       headers: {
@@ -124,10 +189,172 @@ export function createHealthieClient() {
   return new ApolloClient({
     link: authLink.concat(httpLink),
     cache: new InMemoryCache(),
+    // Add error handling for development
+    defaultOptions: {
+      watchQuery: {
+        errorPolicy: 'all',
+      },
+      query: {
+        errorPolicy: 'all',
+      },
+      mutate: {
+        errorPolicy: 'all',
+      },
+    },
   });
 }`,
+      'src/lib/graphql-mutations.ts': `import { gql } from '@apollo/client';
+
+// Healthie GraphQL mutation for creating form answer groups
+export const CREATE_FORM_ANSWER_GROUP = gql\`
+  mutation createFormAnswerGroup($input: createFormAnswerGroupInput) {
+    createFormAnswerGroup(input: $input) {
+      form_answer_group {
+        id
+        name
+        created_at
+        finished
+        custom_module_form {
+          id
+          name
+        }
+        form_answers {
+          id
+          answer
+          custom_module_id
+          label
+        }
+        user {
+          id
+          full_name
+        }
+      }
+      messages {
+        field
+        message
+      }
+    }
+  }
+\`;`,
       '.env.local': `NEXT_PUBLIC_HEALTHIE_API_URL=https://api.gethealthie.com/graphql
 NEXT_PUBLIC_HEALTHIE_API_KEY=your_api_key_here`,
+      'src/components/widgets/index.ts': `// Healthcare Widget Library
+'use client'
+
+// Export all widgets with both named and default exports
+export { AvatarPicker, default as AvatarPickerDefault } from './AvatarPicker';
+export { PainMap, default as PainMapDefault } from './PainMap';
+export { PatientDemographics, default as PatientDemographicsDefault } from './PatientDemographics';
+export { AssessmentScale, default as AssessmentScaleDefault } from './AssessmentScale';
+
+// For convenience - re-export as default object
+export default {
+  AvatarPicker,
+  PainMap,
+  PatientDemographics,
+  AssessmentScale
+};`,
+      // Include actual widget component files
+      'src/components/widgets/AvatarPicker.tsx': `'use client'
+
+import React, { useState } from 'react';
+
+interface Avatar {
+	id: string;
+	name: string;
+	imageUrl: string;
+	ageGroup: 'infant' | 'child' | 'teen' | 'adult';
+	ethnicity: string;
+}
+
+interface AvatarPickerProps {
+	ageGroup?: 'infant' | 'child' | 'teen' | 'adult';
+	onChange: (avatarId: string) => void;
+	value?: string;
+	className?: string;
+}
+
+// Sample avatar data - in production this would come from a comprehensive avatar library
+const AVATARS: Avatar[] = [
+	{ id: 'child_1', name: 'Alex', imageUrl: '/avatars/child_alex.png', ageGroup: 'child', ethnicity: 'diverse' },
+	{ id: 'child_2', name: 'Sam', imageUrl: '/avatars/child_sam.png', ageGroup: 'child', ethnicity: 'diverse' },
+	{ id: 'child_3', name: 'Casey', imageUrl: '/avatars/child_casey.png', ageGroup: 'child', ethnicity: 'diverse' },
+	{ id: 'child_4', name: 'Jordan', imageUrl: '/avatars/child_jordan.png', ageGroup: 'child', ethnicity: 'diverse' },
+	{ id: 'teen_1', name: 'Taylor', imageUrl: '/avatars/teen_taylor.png', ageGroup: 'teen', ethnicity: 'diverse' },
+	{ id: 'teen_2', name: 'Morgan', imageUrl: '/avatars/teen_morgan.png', ageGroup: 'teen', ethnicity: 'diverse' },
+	{ id: 'adult_1', name: 'Adult 1', imageUrl: '/avatars/adult_1.png', ageGroup: 'adult', ethnicity: 'diverse' },
+	{ id: 'adult_2', name: 'Adult 2', imageUrl: '/avatars/adult_2.png', ageGroup: 'adult', ethnicity: 'diverse' },
+];
+
+export function AvatarPicker({ ageGroup = 'child', onChange, value, className = '' }: AvatarPickerProps) {
+	const [selectedAvatar, setSelectedAvatar] = useState<string>(value || '');
+
+	const filteredAvatars = AVATARS.filter(avatar =>
+		ageGroup === 'infant' ? avatar.ageGroup === 'child' : avatar.ageGroup === ageGroup
+	);
+
+	const handleAvatarSelect = (avatarId: string) => {
+		setSelectedAvatar(avatarId);
+		onChange(avatarId);
+	};
+
+	return (
+		<div className={\`avatar-picker \${className}\`}>
+			<div className="mb-4">
+				<h3 className="text-lg font-semibold text-gray-800 mb-2">
+					Choose Your Avatar
+				</h3>
+				<p className="text-sm text-gray-600">
+					Select an avatar that represents you best. This helps personalize your healthcare experience.
+				</p>
+			</div>
+
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+				{filteredAvatars.map((avatar) => (
+					<button
+						key={avatar.id}
+						type="button"
+						onClick={() => handleAvatarSelect(avatar.id)}
+						className={\`
+              relative p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-md
+              \${selectedAvatar === avatar.id
+								? 'border-blue-500 bg-blue-50 shadow-md'
+								: 'border-gray-200 bg-white hover:border-gray-300'
+							}
+            \`}
+						aria-label={\`Select \${avatar.name} avatar\`}
+					>
+						{/* Avatar Image Placeholder */}
+						<div className="w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
+							<span className="text-2xl">👤</span>
+						</div>
+
+						<p className="text-sm font-medium text-gray-700">{avatar.name}</p>
+
+						{/* Selection indicator */}
+						{selectedAvatar === avatar.id && (
+							<div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+								<span className="text-white text-xs">✓</span>
+							</div>
+						)}
+					</button>
+				))}
+			</div>
+
+			{/* Accessibility and engagement features */}
+			<div className="mt-4 text-center">
+				<p className="text-xs text-gray-500">
+					Your avatar helps us make your experience more personal and engaging
+				</p>
+			</div>
+		</div>
+	);
+}
+
+export { AvatarPicker };
+export default AvatarPicker;`,
+      // Dynamic widget files added here
+      ...widgetFiles,
     };
 
     // Step 4: Deploy locally if requested

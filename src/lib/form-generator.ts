@@ -1,19 +1,69 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { FormSpec, FormSpecSchema } from './form-schema';
-import { HEALTHCARE_KNOWLEDGE, HEALTHCARE_WIDGETS } from './healthcare-knowledge';
-import { WIDGET_REGISTRY, generateWidgetDocumentation } from '../components/widgets';
-import { generateHealthieSchemaDoc } from './healthie-schema';
+import { HEALTHCARE_KNOWLEDGE } from './healthcare-knowledge';
+import { generateWidgetDocumentation } from '../components/widgets';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-export async function generateFormSpec(userPrompt: string): Promise<FormSpec> {
+async function generateLiveHealthieSchemaContext(): Promise<string> {
+  return `
+## HEALTHIE GRAPHQL API INTEGRATION:
+
+### Form Submission Pattern:
+\`\`\`graphql
+mutation createFormAnswerGroup($input: createFormAnswerGroupInput) {
+  createFormAnswerGroup(input: $input) {
+    form_answer_group {
+      id
+      name
+      created_at
+      custom_module_form {
+        id
+        name
+      }
+      form_answers {
+        id
+        answer
+        custom_module_id
+        label
+      }
+    }
+    messages {
+      field
+      message
+    }
+  }
+}
+\`\`\`
+
+### Input Structure:
+- **custom_module_form_id**: String - The ID of the form template
+- **user_id**: String - The patient ID
+- **finished**: Boolean - Whether the form is complete
+- **form_answers**: Array of FormAnswerInput objects
+  - **custom_module_id**: String - The field ID
+  - **answer**: String - The user's response
+  - **label**: String - The field label
+
+### Best Practices:
+- Use meaningful custom_module_form_id values
+- Include proper field labels for accessibility
+- Handle validation errors from the API response
+- Store form_answer_group.id for future reference
+`;
+}
+
+// Single-step healthcare app generator
+export async function generateHealthcareApp(userPrompt: string): Promise<string> {
+  const healthieSchemaContext = await generateLiveHealthieSchemaContext();
+  
   const systemPrompt = `
-You are an expert healthcare application generator with deep knowledge of medical workflows, clinical assessments, and HIPAA compliance.
+You are an expert React developer creating HIPAA-compliant healthcare applications with Healthie EMR integration.
+
+${healthieSchemaContext}
 
 ## HEALTHCARE DOMAIN KNOWLEDGE:
-
 ### Common Workflows:
 ${JSON.stringify(HEALTHCARE_KNOWLEDGE.workflows, null, 2)}
 
@@ -23,291 +73,130 @@ ${JSON.stringify(HEALTHCARE_KNOWLEDGE.assessments, null, 2)}
 ### Medical Field Categories:
 ${JSON.stringify(HEALTHCARE_KNOWLEDGE.medical_fields, null, 2)}
 
-### Available Healthcare Widgets:
-${generateWidgetDocumentation()}
-
-## FIELD TYPES AVAILABLE:
-Basic: text, email, number, textarea, select, checkbox, radio
-Healthcare: patient_demographics, pain_scale, medication_list, assessment_scale, avatar_picker, insurance_capture
-
-## OUTPUT FORMAT:
-Return ONLY valid JSON in this structure:
-{
-  "title": "Form Title",
-  "description": "Clinical purpose and context",
-  "app_type": "patient_intake|clinical_assessment|appointment_booking|symptom_tracker",
-  "target_audience": "patient|provider|parent_guardian",
-  "age_group": "adult|pediatric_0_2|pediatric_3_7|pediatric_8_12|adolescent_13_17",
-  "fields": [
-    {
-      "id": "field_name",
-      "type": "field_type",
-      "label": "Clinical appropriate label",
-      "placeholder": "Helpful placeholder text",
-      "required": true|false,
-      "validation": {
-        "pattern": "regex_if_needed",
-        "min": number,
-        "max": number
-      },
-      "options": [{"label": "Option", "value": "value"}], // for select/radio
-      "clinical_coding": "SNOMED_CT|ICD_10|CPT", // if applicable
-      "hipaa_sensitive": true|false
-    }
-  ],
-  "healthie_form_id": "generated_form_id",
-  "submit_button_text": "Contextually appropriate text",
-  "estimated_completion_time": "X minutes",
-  "clinical_validation": {
-    "auto_scoring": true|false,
-    "risk_assessment": true|false,
-    "clinical_alerts": ["condition1", "condition2"]
-  }
-}
-
-## HEALTHCARE-SPECIFIC GUIDELINES:
-1. Use medically accurate terminology
-2. Include appropriate validation for clinical data
-3. Consider age-appropriate language and interactions
-4. Mark PHI fields with hipaa_sensitive: true
-5. For assessments, include proper scoring mechanisms
-6. Suggest relevant clinical coding when applicable
-7. Optimize for healthcare workflows and user types
-
-## USER REQUEST:
-"${userPrompt}"
-
-Generate a healthcare-appropriate application specification:
-`;
-
-  const message = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 3000,
-    messages: [
-      {
-        role: 'user',
-        content: systemPrompt,
-      },
-    ],
-  });
-
-  try {
-    const content = message.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Expected text response from Anthropic');
-    }
-
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-
-    const parsedSpec = JSON.parse(jsonMatch[0]);
-    
-    // Debug: log the generated spec
-    console.log('Generated spec:', JSON.stringify(parsedSpec, null, 2));
-    
-    // For backward compatibility, ensure basic FormSpec structure
-    const compatibleSpec = {
-      title: parsedSpec.title,
-      description: parsedSpec.description,
-      fields: parsedSpec.fields,
-      healthie_form_id: parsedSpec.healthie_form_id || 'custom_form_1',
-      submit_button_text: parsedSpec.submit_button_text || 'Submit'
-    };
-    
-    // Debug: log the compatible spec
-    console.log('Compatible spec:', JSON.stringify(compatibleSpec, null, 2));
-    
-    return FormSpecSchema.parse(compatibleSpec);
-  } catch (error) {
-    console.error('Error parsing form spec:', error);
-    throw new Error(`Failed to generate form specification: ${error.message}`);
-  }
-}
-
-export async function generateReactForm(formSpec: FormSpec): Promise<string> {
-  const systemPrompt = `
-You are an expert React developer creating HIPAA-compliant healthcare applications using the Healthie SDK and modern healthcare UI patterns.
-
-## HEALTHCARE CONTEXT:
-Form Specification: ${JSON.stringify(formSpec, null, 2)}
-
 ## AVAILABLE HEALTHCARE WIDGETS:
 ${generateWidgetDocumentation()}
 
-## WIDGET IMPORT EXAMPLES:
-\`\`\`tsx
-import { AvatarPicker, PainMap, PatientDemographics, AssessmentScale } from './components/widgets';
+## AVAILABLE DEPENDENCIES (ONLY USE THESE):
+- React hooks: useState, useEffect, useMemo
+- Our widgets: { AvatarPicker, PainMap, PatientDemographics, AssessmentScale } from '../components/widgets'
+- Apollo Client: { useMutation } from '@apollo/client'
+- GraphQL: { CREATE_FORM_ANSWER_GROUP } from '../lib/graphql-mutations'
+- Healthie types: { CreateFormAnswerGroupInput, FormAnswerInput } from '../lib/healthie'
+- Tailwind CSS classes
 
-// Example usage:
-<AvatarPicker 
-  ageGroup="child" 
-  onChange={(avatarId) => setFormData({...formData, avatar: avatarId})} 
-/>
+## REQUIREMENTS:
+1. Generate a complete React component (TypeScript)
+2. Use proper HIPAA security patterns
+3. Include form validation (inline, simple functions)
+4. Integrate with Healthie via CREATE_FORM_ANSWER_GROUP mutation
+5. Use appropriate healthcare widgets
+6. Include accessibility features
+7. Handle errors and loading states
 
-<PainMap 
-  bodyType="adult"
-  maxPoints={5}
-  onChange={(painPoints) => setFormData({...formData, pain: painPoints})} 
-/>
-
-<PatientDemographics 
-  required={['firstName', 'lastName', 'dateOfBirth']}
-  onChange={(demographics) => setFormData({...formData, patient: demographics})} 
-/>
-
-<AssessmentScale 
-  scaleType="PHQ-9"
-  onChange={(responses, result) => setFormData({...formData, assessment: result})} 
-/>
-\`\`\`
-
-## HIPAA COMPLIANCE REQUIREMENTS:
-${JSON.stringify(HEALTHCARE_KNOWLEDGE.hipaa_requirements, null, 2)}
-
-## HEALTHCARE UI PATTERNS:
-${JSON.stringify(HEALTHCARE_KNOWLEDGE.ui_patterns, null, 2)}
-
-## HEALTHIE GRAPHQL INTEGRATION:
-${generateHealthieSchemaDoc()}
-
-## GENERATE A COMPLETE REACT HEALTHCARE APPLICATION:
-
-Requirements:
-1. **HIPAA Compliance**: No PHI in console.log, secure data handling, audit trails
-2. **Healthcare UX**: Patient-friendly design, accessibility (WCAG 2.1 AA), mobile-first
-3. **Healthie Integration**: Uses @healthie/sdk properly with authentication
-4. **Clinical Accuracy**: Proper medical terminology, validated input patterns
-5. **Error Handling**: Healthcare-appropriate error messages and validation
-6. **Progress Indicators**: Clear completion progress for longer forms
-7. **Age-Appropriate Design**: Adapt UI based on target age group
-
-## COMPONENT STRUCTURE:
-\`\`\`tsx
+## EXAMPLE STRUCTURE:
+\`\`\`typescript
 import React, { useState, useEffect } from 'react';
-import { ApolloProvider } from '@apollo/client';
-import { Form } from '@healthie/sdk';
-import { createHealthieClient } from './lib/healthie';
-import '@healthie/sdk/dist/styles/index.css';
+import { useMutation } from '@apollo/client';
+import { AvatarPicker, PainMap, PatientDemographics, AssessmentScale } from '../components/widgets';
+import { CREATE_FORM_ANSWER_GROUP } from '../lib/graphql-mutations';
+import { CreateFormAnswerGroupInput } from '../lib/healthie';
 
-const client = createHealthieClient();
-
-// TypeScript interfaces for form data
-interface FormData {
-  [key: string]: any;
-}
-
-// Healthcare-specific validation functions
-const validateMedicalData = (data: FormData) => {
-  // Include appropriate medical data validation
-};
-
-// HIPAA-compliant logging
-const logSecurely = (event: string, metadata?: any) => {
-  // Log without PHI, include audit trail information
-};
-
-export default function HealthcareForm() {
-  const [formData, setFormData] = useState<FormData>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const MyHealthcareForm: React.FC = () => {
+  // State management
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [currentStep, setCurrentStep] = useState(1);
-
-  // Healthcare-appropriate form submission
-  const handleSubmit = async (data: FormData) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Apollo mutation
+  const [createFormAnswerGroup] = useMutation(CREATE_FORM_ANSWER_GROUP);
+  
+  // Simple validation functions
+  const validateEmail = (email: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+  const validatePhone = (phone: string) => /^[\\d\\s\\-\\(\\)\\+]{10,}$/.test(phone);
+  
+  // Field change handler
+  const handleFieldChange = (fieldId: string, value: any) => {
+    setFormData(prev => ({ ...prev, [fieldId]: value }));
+    
+    // Clear errors when user starts typing
+    if (errors[fieldId]) {
+      setErrors(prev => ({ ...prev, [fieldId]: '' }));
+    }
+  };
+  
+  // Get field label for Healthie submission
+  const getFieldLabel = (fieldId: string): string => {
+    const fieldLabels: Record<string, string> = {
+      // Add mappings based on your form fields
+    };
+    return fieldLabels[fieldId] || fieldId.replace('_', ' ');
+  };
+  
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
-      setIsSubmitting(true);
-      logSecurely('form_submission_started');
+      const response = await createFormAnswerGroup({
+        variables: {
+          input: {
+            custom_module_form_id: 'healthcare_form_123',
+            finished: true,
+            form_answers: Object.entries(formData).map(([id, answer]) => ({
+              custom_module_id: id,
+              answer: String(answer),
+              label: getFieldLabel(id)
+            }))
+          }
+        }
+      });
       
-      // Validate healthcare data
-      const validation = validateMedicalData(data);
-      if (!validation.isValid) {
-        setErrors(validation.errors);
-        return;
-      }
-
-      // Submit to Healthie with proper error handling
-      // Include clinical validation and risk assessment
-      
-      logSecurely('form_submission_completed');
+      console.log('Form submitted successfully:', response);
     } catch (error) {
-      logSecurely('form_submission_error', { error_type: error.name });
-      // Show healthcare-appropriate error message
+      console.error('Submission error:', error);
+      setErrors(prev => ({ ...prev, submit: 'Failed to submit form. Please try again.' }));
     } finally {
       setIsSubmitting(false);
     }
   };
-
+  
   return (
-    <ApolloProvider client={client}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
-        {/* HIPAA Privacy Notice */}
-        <div className="bg-blue-600 text-white px-4 py-2 text-sm">
-          🔒 This form is HIPAA-compliant and your health information is protected
-        </div>
-
-        <div className="max-w-4xl mx-auto p-6">
-          {/* Header with clinical context */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {formSpec.title}
-            </h1>
-            {formSpec.description && (
-              <p className="text-lg text-gray-600 mb-4">{formSpec.description}</p>
-            )}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-green-800 text-sm">
-                ✓ Secure • ✓ HIPAA Compliant • ✓ Encrypted
-              </p>
-            </div>
-          </div>
-
-          {/* Progress indicator for multi-step forms */}
-          <div className="mb-8">
-            <div className="bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: \`\${(currentStep / totalSteps) * 100}%\` }}
-              ></div>
-            </div>
-            <p className="text-sm text-gray-600 mt-2">
-              Step {currentStep} of {totalSteps} • Estimated time: {estimatedTime}
-            </p>
-          </div>
-
-          {/* Main form using Healthie SDK */}
-          <div className="bg-white rounded-lg shadow-lg">
-            <Form
-              id={formSpec.healthie_form_id}
-              onSubmit={handleSubmit}
-              className="p-6"
-            />
-          </div>
-
-          {/* Healthcare-specific footer */}
-          <div className="mt-8 text-center text-xs text-gray-500">
-            <p>
-              Protected Health Information (PHI) is encrypted and secure. 
-              By submitting this form, you acknowledge our HIPAA Privacy Notice.
-            </p>
-          </div>
-        </div>
+    <div className="max-w-4xl mx-auto p-6 bg-white">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Healthcare Form</h1>
+        <p className="text-gray-600">Please provide accurate information for your healthcare record.</p>
       </div>
-    </ApolloProvider>
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Use healthcare widgets and form fields here */}
+        
+        {errors.submit && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-600">{errors.submit}</p>
+          </div>
+        )}
+        
+        <div className="flex justify-end">
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Healthcare Information'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
-}
+};
+
+export default MyHealthcareForm;
 \`\`\`
 
-Generate the complete, production-ready healthcare React component. Include:
-- Age-appropriate styling and interactions
-- Clinical validation patterns
-- HIPAA compliance measures
-- Healthcare accessibility features
-- Proper error handling
-- Medical terminology accuracy
+User Request: ${userPrompt}
 
-Return ONLY the complete React component code without explanations or markdown formatting.
+Generate a complete, working React healthcare application following the above pattern:
 `;
 
   const message = await anthropic.messages.create({
@@ -327,11 +216,26 @@ Return ONLY the complete React component code without explanations or markdown f
   }
 
   // Extract the React component code
-  const codeMatch = content.text.match(/```tsx\n([\s\S]*?)```/);
+  const codeMatch = content.text.match(/```typescript\n([\s\S]*?)\n```/) || 
+                   content.text.match(/```tsx\n([\s\S]*?)\n```/) ||
+                   content.text.match(/```jsx\n([\s\S]*?)\n```/);
+  
   if (codeMatch) {
     return codeMatch[1];
   }
-
-  // If no code block found, return the entire content (LLM might not use code blocks)
+  
+  // If no code blocks found, return the whole response (fallback)
   return content.text;
+}
+
+// Legacy function for backward compatibility (will be removed)
+export async function generateFormSpec(userPrompt: string): Promise<any> {
+  console.warn('generateFormSpec is deprecated. Use generateHealthcareApp instead.');
+  return { title: 'Legacy', description: 'Use generateHealthcareApp', fields: [], healthie_form_id: 'deprecated' };
+}
+
+// Legacy function for backward compatibility (will be removed)
+export async function generateReactForm(formSpec: any): Promise<string> {
+  console.warn('generateReactForm is deprecated. Use generateHealthcareApp instead.');
+  return generateHealthcareApp('Create a basic healthcare form');
 }
