@@ -103,35 +103,7 @@ class SupabaseInterface {
       this.currentUser = data.user;
       Logger.info("Sign up successful", { userId: data.user?.id });
 
-      // Create user profile in users table
-      if (data.user) {
-        try {
-          const { error: profileError } = await this.supabase
-            .from("users")
-            .insert({
-              id: data.user.id,
-              name: name || "",
-            });
-
-          if (profileError) {
-            Logger.error("Failed to create user profile", profileError, {
-              userId: data.user.id,
-              name,
-            });
-            throw new Error(
-              `Failed to create user profile: ${profileError.message}`
-            );
-          }
-          Logger.info("User profile created successfully", {
-            userId: data.user.id,
-          });
-        } catch (profileError) {
-          Logger.error("User profile creation error", profileError, {
-            userId: data.user.id,
-          });
-          throw profileError;
-        }
-      }
+      // User profile is auto-created by Supabase when auth flow completes
 
       return data;
     } catch (error) {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LoginForm {
 	email: string;
@@ -10,12 +11,13 @@ interface LoginForm {
 
 export default function LoginPage() {
 	const router = useRouter();
+	const { signIn, loading } = useAuth();
 	const [formData, setFormData] = useState<LoginForm>({
 		email: '',
 		password: ''
 	});
 	const [errors, setErrors] = useState<Partial<LoginForm>>({});
-	const [isLoading, setIsLoading] = useState(false);
+	const [authError, setAuthError] = useState<string>('');
 
 	const validateForm = (): boolean => {
 		const newErrors: Partial<LoginForm> = {};
@@ -41,29 +43,22 @@ export default function LoginPage() {
 			return;
 		}
 
-		setIsLoading(true);
+		setAuthError('');
 
 		try {
-			// Simulate API call for login
-			await new Promise(resolve => setTimeout(resolve, 1000));
-
-			// For demo purposes, we'll create a mock user session
-			// In a real app, you'd verify credentials with your backend
-			const userData = {
-				email: formData.email,
-				clinicName: 'Demo Clinic',
-				emr: 'healthie',
-				specialty: 'PCP',
-				isLoggedIn: true
-			};
-			localStorage.setItem('userData', JSON.stringify(userData));
-
-			// Redirect to main dashboard
-			router.push('/');
+			// Sign in using auth context
+			const { user } = await signIn(formData.email, formData.password);
+			
+			if (user) {
+				// AuthProvider handles localStorage and user state
+				// Redirect to main dashboard
+				router.push('/');
+			} else {
+				setAuthError('Login failed. Please try again.');
+			}
 		} catch (error) {
 			console.error('Login error:', error);
-		} finally {
-			setIsLoading(false);
+			setAuthError(error instanceof Error ? error.message : 'Login failed. Please try again.');
 		}
 	};
 
@@ -135,13 +130,20 @@ export default function LoginPage() {
 						)}
 					</div>
 
+					{/* Auth Error */}
+					{authError && (
+						<div className="bg-red-50 border border-red-200 rounded-lg p-3">
+							<p className="text-sm text-red-700">{authError}</p>
+						</div>
+					)}
+
 					{/* Submit Button */}
 					<button
 						type="submit"
-						disabled={isLoading}
+						disabled={loading}
 						className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
 					>
-						{isLoading ? 'Signing in...' : 'Sign in'}
+						{loading ? 'Signing in...' : 'Sign in'}
 					</button>
 				</form>
 
