@@ -1,33 +1,8 @@
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import JSZip from "jszip";
-
-// Database types (you can expand this as needed)
-interface Database {
-  public: {
-    Tables: {
-      pages: {
-        Row: {
-          id: string;
-          storage_object: string;
-          owner: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          storage_object: string;
-          owner: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          storage_object?: string;
-          owner?: string;
-          created_at?: string;
-        };
-      };
-    };
-  };
-}
+import { Database } from "./types";
+import Uppy from "@uppy/core";
+import Tus from "@uppy/tus";
 
 // Enhanced logging utility
 class Logger {
@@ -123,13 +98,16 @@ class SupabaseInterface {
         throw new Error(`Sign up failed: ${error.message}`);
       }
 
+      // Store auth result
       this.lastAuthResult = data;
       this.currentUser = data.user;
       Logger.info("Sign up successful", { userId: data.user?.id });
+
       // User profile is auto-created by Supabase when auth flow completes
+
       return data;
     } catch (error) {
-      Logger.error("Sign up failed", error, { email });
+      Logger.error("Sign up process failed", error, { email });
       throw error;
     }
   }
@@ -148,62 +126,396 @@ class SupabaseInterface {
         throw new Error(`Sign in failed: ${error.message}`);
       }
 
+      // Store auth result
       this.lastAuthResult = data;
-      Logger.info("Sign in successful", { email, userId: data.user?.id });
+      this.currentUser = data.user;
+      Logger.info("Sign in successful", { userId: data.user?.id });
+
       return data;
     } catch (error) {
-      Logger.error("Sign in failed", error, { email });
+      Logger.error("Sign in process failed", error, { email });
       throw error;
     }
   }
 
   async signOut() {
     try {
-      Logger.info("Attempting sign out");
+      Logger.info("Attempting sign out", { userId: this.currentUser?.id });
 
       const { error } = await this.supabase.auth.signOut();
-
       if (error) {
         Logger.error("Sign out failed", error);
         throw new Error(`Sign out failed: ${error.message}`);
       }
 
+      // Clear cached data
       this.currentUser = null;
       this.lastAuthResult = null;
       Logger.info("Sign out successful");
     } catch (error) {
-      Logger.error("Sign out failed", error);
+      Logger.error("Sign out process failed", error);
       throw error;
     }
   }
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user }, error } = await this.supabase.auth.getUser();
+      // If we have a cached user, return it
+      if (this.currentUser) {
+        return this.currentUser;
+      }
+
+      // Otherwise, fetch from Supabase and cache it
+      const {
+        data: { user },
+        error,
+      } = await this.supabase.auth.getUser();
 
       if (error) {
         Logger.error("Failed to get current user", error);
-        return null;
+        throw error;
       }
 
       this.currentUser = user;
-      Logger.info("Current user retrieved", { userId: user?.id });
+      Logger.info("Retrieved current user", { userId: user?.id });
       return user;
     } catch (error) {
-      Logger.error("Failed to get current user", error);
-      return null;
+      Logger.error("Get current user failed", error);
+      throw error;
     }
   }
 
+  // Method to get auth state change listener
   onAuthStateChange(callback: (event: string, session: unknown) => void) {
     return this.supabase.auth.onAuthStateChange(callback);
   }
 
+  // Get last auth result
   getLastAuthResult() {
     return this.lastAuthResult;
   }
 
-  // Storage Functions
+  // Healthie Key Retrieval
+  async getHealthieKey(): Promise<string | null> {
+    try {
+      Logger.info("Retrieving Healthie key");
+
+      const user = await this.getCurrentUser();
+      if (!user) {
+        const error = new Error("User not authenticated");
+        Logger.error("Cannot get Healthie key - no user", error);
+        throw error;
+      }
+
+      const { data, error } = await this.supabase
+        .from("users")
+        .select("healthie_id")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        Logger.error("Failed to fetch user data", error, { userId: user.id });
+        throw new Error(`Failed to fetch user data: ${error.message}`);
+      }
+
+      Logger.info("Healthie key retrieved", {
+        userId: user.id,
+        hasKey: !!data.healthie_id,
+      });
+      return data.healthie_id;
+    } catch (error) {
+      Logger.error("Get Healthie key failed", error);
+      throw error;
+    }
+  }
+
+  async hasHealthieKey(): Promise<boolean> {
+    try {
+      const healthieId = await this.getHealthieKey();
+      const hasKey = healthieId !== null;
+      Logger.info("Checked Healthie key status", { hasKey });
+      return hasKey;
+    } catch (error) {
+      Logger.error("Has Healthie key check failed", error);
+      throw error;
+    }
+  }
+
+  // HTML Bundle Management with Resumable Upload
+  async uploadBundle(
+    files: File[],
+    pageName: string,
+    pagePath: string,
+    onProgress?: (progress: number) => void
+  ): Promise<string> {
+    try {
+      Logger.info("Starting bundle upload", {
+        fileCount: files.length,
+        pageName,
+        pagePath,
+      });
+
+      const user = await this.getCurrentUser();
+      if (!user) {
+        const error = new Error("User not authenticated");
+        Logger.error("Upload failed - no user", error);
+        throw error;
+      }
+
+      // Create zip from files
+      Logger.info("Creating ZIP archive", { fileCount: files.length });
+      const zip = new JSZip();
+
+      for (const file of files) {
+        try {
+          const content = await file.arrayBuffer();
+          // Use webkitRelativePath if available (from directory upload), otherwise use name
+          const filePath =
+            (file as File & { webkitRelativePath?: string })
+              .webkitRelativePath || file.name;
+          zip.file(filePath, content);
+          Logger.info("Added file to ZIP", {
+            fileName: file.name,
+            size: file.size,
+          });
+        } catch (error) {
+          Logger.error("Failed to add file to ZIP", error, {
+            fileName: file.name,
+          });
+          throw new Error(
+            `Failed to process file ${file.name}: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
+        }
+      }
+
+      // Generate zip buffer
+      Logger.info("Generating ZIP buffer");
+      const zipBuffer = await zip.generateAsync({ type: "arraybuffer" });
+      const zipSize = zipBuffer.byteLength;
+      Logger.info("ZIP buffer generated", { sizeBytes: zipSize });
+
+      // Use user.id as folder name for bucket security policy
+      const fileName = `${user.id}/${pageName.replace(
+        /[^a-zA-Z0-9]/g,
+        "-"
+      )}-${Date.now()}.zip`;
+
+      // Use resumable upload for large files (>6MB) or when explicitly requested
+      let uploadData;
+      if (zipSize > 6 * 1024 * 1024) {
+        Logger.info("Using resumable upload for large file", {
+          sizeBytes: zipSize,
+        });
+        uploadData = await this.uploadWithUppy(zipBuffer, fileName, onProgress);
+      } else {
+        Logger.info("Using standard upload for small file", {
+          sizeBytes: zipSize,
+        });
+        const { data, error: uploadError } = await this.supabase.storage
+          .from("pages-storage")
+          .upload(fileName, zipBuffer, {
+            contentType: "application/zip",
+          });
+
+        if (uploadError) {
+          Logger.error("Standard upload failed", uploadError, {
+            fileName,
+            sizeBytes: zipSize,
+          });
+          throw new Error(`Failed to upload bundle: ${uploadError.message}`);
+        }
+        uploadData = data;
+      }
+
+      Logger.info("Bundle upload completed successfully", {
+        fileName,
+        uploadPath: uploadData.path,
+        sizeBytes: zipSize,
+      });
+
+      // Return the file path as the identifier since page entry is auto-created
+      return uploadData.path || fileName;
+    } catch (error) {
+      Logger.error("Bundle upload failed", error, {
+        pageName,
+        pagePath,
+        fileCount: files.length,
+      });
+      throw error;
+    }
+  }
+
+  // Resumable upload using Uppy
+  private async uploadWithUppy(
+    zipBuffer: ArrayBuffer,
+    fileName: string,
+    onProgress?: (progress: number) => void
+  ): Promise<{ id: string; path: string }> {
+    return new Promise((resolve, reject) => {
+      try {
+        Logger.info("Initializing Uppy for resumable upload", { fileName });
+
+        const uppy = new Uppy({
+          restrictions: {
+            maxFileSize: 100 * 1024 * 1024, // 100MB max
+            maxNumberOfFiles: 1,
+          },
+        });
+
+        uppy.use(Tus, {
+          endpoint: `${this.supabaseUrl}/storage/v1/upload/resumable`,
+          headers: {
+            authorization: `Bearer ${this.supabaseKey}`,
+            "x-upsert": "true",
+          },
+          chunkSize: 6 * 1024 * 1024, // 6MB chunks
+          removeFingerprintOnSuccess: true,
+          metadata: {
+            bucketName: "pages-storage",
+            objectName: fileName,
+            contentType: "application/zip",
+          },
+        });
+
+        uppy.on("upload-progress", (file, progress) => {
+          const percentage = progress.bytesTotal
+            ? Math.round((progress.bytesUploaded / progress.bytesTotal) * 100)
+            : 0;
+          Logger.info("Upload progress", {
+            fileName,
+            percentage,
+            bytesUploaded: progress.bytesUploaded,
+          });
+          onProgress?.(percentage);
+        });
+
+        uppy.on("upload-success", (_file, response) => {
+          Logger.info("Uppy upload successful", { fileName, response });
+          resolve({
+            id: fileName, // Supabase storage uses the file path as ID
+            path: fileName,
+          });
+        });
+
+        uppy.on("upload-error", (_file, error) => {
+          Logger.error("Uppy upload failed", error, { fileName });
+          reject(new Error(`Resumable upload failed: ${error.message}`));
+        });
+
+        // Convert ArrayBuffer to File object for Uppy
+        const blob = new Blob([zipBuffer], { type: "application/zip" });
+        const file = new File([blob], fileName, { type: "application/zip" });
+
+        uppy.addFile({
+          name: fileName,
+          type: "application/zip",
+          data: file,
+        });
+
+        uppy.upload();
+      } catch (error) {
+        Logger.error("Uppy initialization failed", error, { fileName });
+        reject(error);
+      }
+    });
+  }
+
+  async downloadBundle(
+    filePath: string
+  ): Promise<{ blob: Blob; pageName: string }> {
+    try {
+      Logger.info("Starting bundle download", { filePath });
+
+      const user = await this.getCurrentUser();
+      if (!user) {
+        const error = new Error("User not authenticated");
+        Logger.error("Download failed - no user", error, { filePath });
+        throw error;
+      }
+
+      // Verify the file path belongs to the current user
+      if (!filePath.startsWith(`${user.id}/`)) {
+        const error = new Error("Access denied: File does not belong to user");
+        Logger.error("Access denied for file download", error, {
+          filePath,
+          userId: user.id,
+        });
+        throw error;
+      }
+
+      // Extract page name from file path
+      const fileName = filePath.split("/").pop() || "";
+      const pageName = fileName.replace(/\.zip$/, "").replace(/-\d+$/, "");
+
+      // Download from storage
+      Logger.info("Downloading from storage", {
+        filePath,
+        fileName,
+        pageName,
+      });
+      const { data: downloadData, error: downloadError } =
+        await this.supabase.storage.from("pages-storage").download(filePath);
+
+      if (downloadError) {
+        Logger.error("Failed to download bundle", downloadError, {
+          filePath,
+          fileName,
+        });
+        throw new Error(`Failed to download bundle: ${downloadError.message}`);
+      }
+
+      Logger.info("Bundle download successful", {
+        filePath,
+        pageName,
+        blobSize: downloadData.size,
+      });
+
+      return {
+        blob: downloadData,
+        pageName,
+      };
+    } catch (error) {
+      Logger.error("Bundle download failed", error, { filePath });
+      throw error;
+    }
+  }
+
+  // Helper method to extract zip in browser and trigger downloads
+  async extractAndDownloadZip(zipBlob: Blob): Promise<void> {
+    const zip = new JSZip();
+    const zipContent = await zip.loadAsync(zipBlob);
+
+    // Extract all files and create download links
+    const promises = Object.keys(zipContent.files).map(async (filename) => {
+      const file = zipContent.files[filename];
+      if (!file.dir) {
+        const content = await file.async("blob");
+        this.downloadFile(content, filename);
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  // Helper method to download a single file
+  private downloadFile(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Method to download zip file directly
+  downloadZipFile(blob: Blob, filename: string): void {
+    this.downloadFile(blob, `${filename}.zip`);
+  }
+
   async getUserPages() {
     try {
       Logger.info("Fetching user pages from storage");
@@ -261,18 +573,65 @@ class SupabaseInterface {
         throw error;
       }
 
-      // Extract the file path from the pageId
-      const filePath = pageId.replace(`${user.id}/`, "");
-      
+      // Get page info first
+      Logger.info("Fetching page info for deletion", {
+        pageId,
+        userId: user.id,
+      });
+      const { data: pageData, error: pageError } = await this.supabase
+        .from("pages")
+        .select("storage_object, owner")
+        .eq("id", pageId)
+        .single();
+
+      if (pageError) {
+        Logger.error("Failed to fetch page for deletion", pageError, {
+          pageId,
+          userId: user.id,
+        });
+        throw new Error(`Failed to fetch page: ${pageError.message}`);
+      }
+
+      // Check ownership
+      if (pageData.owner !== user.id) {
+        const error = new Error("Access denied: You do not own this page");
+        Logger.error("Access denied for page deletion", error, {
+          pageId,
+          userId: user.id,
+          pageOwner: pageData.owner,
+        });
+        throw error;
+      }
+
       // Delete from storage
-      Logger.info("Deleting from storage", { pageId, filePath });
+      Logger.info("Deleting from storage", {
+        pageId,
+        storageObject: pageData.storage_object,
+      });
       const { error: storageError } = await this.supabase.storage
         .from("pages-storage")
-        .remove([pageId]);
+        .remove([pageData.storage_object]);
 
       if (storageError) {
-        Logger.error("Failed to delete storage object", storageError, { pageId });
-        throw new Error(`Failed to delete storage object: ${storageError.message}`);
+        Logger.error("Failed to delete storage object", storageError, {
+          pageId,
+          storageObject: pageData.storage_object,
+        });
+        throw new Error(
+          `Failed to delete storage object: ${storageError.message}`
+        );
+      }
+
+      // Delete page entry
+      Logger.info("Deleting page entry from database", { pageId });
+      const { error: deleteError } = await this.supabase
+        .from("pages")
+        .delete()
+        .eq("id", pageId);
+
+      if (deleteError) {
+        Logger.error("Failed to delete page entry", deleteError, { pageId });
+        throw new Error(`Failed to delete page: ${deleteError.message}`);
       }
 
       Logger.info("Page deletion completed successfully", { pageId });
@@ -280,53 +639,6 @@ class SupabaseInterface {
       Logger.error("Page deletion failed", error, { pageId });
       throw error;
     }
-  }
-
-  async downloadBundle(filePath: string): Promise<{ blob: Blob; pageName: string }> {
-    try {
-      Logger.info("Starting bundle download", { filePath });
-
-      const user = await this.getCurrentUser();
-      if (!user) {
-        const error = new Error("User not authenticated");
-        Logger.error("Download failed - no user", error, { filePath });
-        throw error;
-      }
-
-      // Download the file from storage
-      const { data, error } = await this.supabase.storage
-        .from("pages-storage")
-        .download(filePath);
-
-      if (error) {
-        Logger.error("Failed to download bundle", error, { filePath });
-        throw new Error(`Failed to download bundle: ${error.message}`);
-      }
-
-      if (!data) {
-        throw new Error("No data received from download");
-      }
-
-      const pageName = filePath.split('/').pop()?.replace(/\.zip$/, "") || "app";
-      
-      Logger.info("Bundle download completed successfully", { filePath, pageName });
-      return { blob: data, pageName };
-    } catch (error) {
-      Logger.error("Bundle download failed", error, { filePath });
-      throw error;
-    }
-  }
-
-  // Helper method to download zip file directly
-  downloadZipFile(blob: Blob, filename: string): void {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
   }
 }
 
