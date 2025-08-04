@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseInterface } from '@/supabase/supabaseInterface';
 
-interface UserPage {
+interface GeneratedProject {
 	id: string;
-	created_at: string;
-	path: string;
 	name: string;
+	path: string;
+	port?: number;
+	status: 'creating' | 'installing' | 'starting' | 'running' | 'stopped' | 'error';
+	url?: string;
+	error?: string;
+	createdAt: Date;
 }
 
 interface UserData {
@@ -23,9 +26,9 @@ export default function MyApps() {
 	const router = useRouter();
 	const [userData, setUserData] = useState<UserData | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
-	const [pages, setPages] = useState<UserPage[]>([]);
+	const [projects, setProjects] = useState<GeneratedProject[]>([]);
 	const [error, setError] = useState<string | null>(null);
-	const [isLoadingPages, setIsLoadingPages] = useState(true);
+	const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
 	// Check authentication on component mount
 	useEffect(() => {
@@ -53,26 +56,93 @@ export default function MyApps() {
 		checkAuth();
 	}, [router]);
 
-	// Load user pages
+	// Load generated projects (with demo data for hackathon)
 	useEffect(() => {
-		const loadUserPages = async () => {
+		const loadProjects = async () => {
 			if (!userData) return;
 
 			try {
-				setIsLoadingPages(true);
+				setIsLoadingProjects(true);
 				setError(null);
 				
-				const userPages = await supabaseInterface.getUserPages();
-				setPages(userPages);
+				// Simulate loading delay for demo
+				await new Promise(resolve => setTimeout(resolve, 1500));
+				
+				// Mock demo data for hackathon presentation
+				const mockProjects: GeneratedProject[] = [
+					{
+						id: 'demo-patient-intake-001',
+						name: 'Primary Care Patient Intake',
+						path: '/Users/beakalteshome/src/healthcare-hack/carecanvas-ai/generated-apps/primary-care-patient-intake',
+						port: 3001,
+						status: 'running',
+						url: 'http://localhost:3001',
+						createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
+					},
+					{
+						id: 'demo-mental-health-002',
+						name: 'Mental Health Assessment Form',
+						path: '/Users/beakalteshome/src/healthcare-hack/carecanvas-ai/generated-apps/mental-health-assessment',
+						port: 3002,
+						status: 'running',
+						url: 'http://localhost:3002',
+						createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000) // 4 hours ago
+					},
+					{
+						id: 'demo-pediatric-003',
+						name: 'Pediatric Wellness Check',
+						path: '/Users/beakalteshome/src/healthcare-hack/carecanvas-ai/generated-apps/pediatric-wellness-check',
+						port: 3003,
+						status: 'running',
+						url: 'http://localhost:3003',
+						createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) // 1 day ago
+					},
+					{
+						id: 'demo-cardiology-004',
+						name: 'Cardiology Pre-Visit Form',
+						path: '/Users/beakalteshome/src/healthcare-hack/carecanvas-ai/generated-apps/cardiology-pre-visit',
+						status: 'stopped',
+						createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+					},
+					{
+						id: 'demo-dermatology-005',
+						name: 'Dermatology Intake & Photo Upload',
+						path: '/Users/beakalteshome/src/healthcare-hack/carecanvas-ai/generated-apps/dermatology-intake',
+						port: 3005,
+						status: 'running',
+						url: 'http://localhost:3005',
+						createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000) // 6 hours ago
+					}
+				];
+
+				// Also try to load real projects and merge with demo data
+				try {
+					const response = await fetch('/api/projects');
+					const data = await response.json();
+					
+					if (data.success && data.projects.length > 0) {
+						const realProjects = data.projects.map((project: any) => ({
+							...project,
+							createdAt: new Date(project.createdAt)
+						}));
+						// Merge real projects with demo projects
+						setProjects([...realProjects, ...mockProjects.slice(realProjects.length)]);
+					} else {
+						setProjects(mockProjects);
+					}
+				} catch {
+					// If API fails, just use mock data
+					setProjects(mockProjects);
+				}
 			} catch (err) {
-				console.error('Failed to load user pages:', err);
+				console.error('Failed to load projects:', err);
 				setError(err instanceof Error ? err.message : 'Failed to load your apps');
 			} finally {
-				setIsLoadingPages(false);
+				setIsLoadingProjects(false);
 			}
 		};
 
-		loadUserPages();
+		loadProjects();
 	}, [userData]);
 
 	const handleLogout = () => {
@@ -80,38 +150,63 @@ export default function MyApps() {
 		router.push('/signup');
 	};
 
-	const handleDeleteApp = async (pageId: string) => {
-		if (!confirm('Are you sure you want to delete this app? This action cannot be undone.')) {
+	const handleDeleteProject = async (projectId: string) => {
+		if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
 			return;
 		}
 
 		try {
-			await supabaseInterface.deletePage(pageId);
+			const response = await fetch(`/api/projects/${projectId}`, {
+				method: 'DELETE'
+			});
 			
-			// Remove from local state
-			setPages(prev => prev.filter(page => page.id !== pageId));
+			const data = await response.json();
+			if (data.success) {
+				// Remove from local state
+				setProjects(prev => prev.filter(project => project.id !== projectId));
+			} else {
+				throw new Error(data.error || 'Failed to delete project');
+			}
 		} catch (err) {
-			console.error('Failed to delete app:', err);
-			alert('Failed to delete app. Please try again.');
+			console.error('Failed to delete project:', err);
+			alert('Failed to delete project. Please try again.');
 		}
 	};
 
-	const handleDownloadApp = async (pageId: string, pageName: string) => {
+	const handleStopProject = async (projectId: string) => {
 		try {
-			const { blob } = await supabaseInterface.downloadBundle(pageId);
+			const response = await fetch(`/api/projects/${projectId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'stop' })
+			});
 			
-			// Create download link
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `${pageName}.zip`;
-			document.body.appendChild(a);
-			a.click();
-			window.URL.revokeObjectURL(url);
-			document.body.removeChild(a);
+			const data = await response.json();
+			if (data.success) {
+				// Update project status in local state
+				setProjects(prev => prev.map(project => 
+					project.id === projectId 
+						? { ...project, status: 'stopped', url: undefined }
+						: project
+				));
+			} else {
+				throw new Error(data.error || 'Failed to stop project');
+			}
 		} catch (err) {
-			console.error('Failed to download app:', err);
-			alert('Failed to download app. Please try again.');
+			console.error('Failed to stop project:', err);
+			alert('Failed to stop project. Please try again.');
+		}
+	};
+
+	const getStatusColor = (status: GeneratedProject['status']) => {
+		switch (status) {
+			case 'running': return 'text-green-600 bg-green-100';
+			case 'stopped': return 'text-gray-600 bg-gray-100';
+			case 'error': return 'text-red-600 bg-red-100';
+			case 'creating':
+			case 'installing':
+			case 'starting': return 'text-yellow-600 bg-yellow-100';
+			default: return 'text-gray-600 bg-gray-100';
 		}
 	};
 
@@ -201,17 +296,17 @@ export default function MyApps() {
 					)}
 
 					{/* Loading State */}
-					{isLoadingPages && (
+					{isLoadingProjects && (
 						<div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
 							<div className="text-center">
 								<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-								<p className="text-gray-600">Loading your apps...</p>
+								<p className="text-gray-600">Loading your projects...</p>
 							</div>
 						</div>
 					)}
 
-					{/* Apps Grid */}
-					{!isLoadingPages && pages.length === 0 && (
+					{/* Empty State */}
+					{!isLoadingProjects && projects.length === 0 && (
 						<div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
 							<div className="text-center">
 								<div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -236,34 +331,60 @@ export default function MyApps() {
 						</div>
 					)}
 
-					{/* Apps List */}
-					{!isLoadingPages && pages.length > 0 && (
+					{/* Projects List */}
+					{!isLoadingProjects && projects.length > 0 && (
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-							{pages.map((page) => (
-								<div key={page.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+							{projects.map((project) => (
+								<div key={project.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
 									<div className="flex items-start justify-between mb-4">
 										<div className="flex-1">
-											<h3 className="text-lg font-semibold text-gray-900 mb-1">
-												{page.name}
+											<h3 className="text-lg font-semibold text-gray-900 mb-2">
+												{project.name}
 											</h3>
+											<div className="flex items-center mb-2">
+												<span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(project.status)}`}>
+													{project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+												</span>
+												{project.port && (
+													<span className="text-xs text-gray-500 ml-2">
+														Port {project.port}
+													</span>
+												)}
+											</div>
 											<p className="text-sm text-gray-500">
-												Created {new Date(page.created_at).toLocaleDateString()}
+												Created {project.createdAt.toLocaleDateString()}
 											</p>
 										</div>
 										<div className="flex items-center space-x-2">
+											{project.status === 'running' && project.url && (
+												<a
+													href={project.url}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+													title="Open App"
+												>
+													<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+													</svg>
+												</a>
+											)}
+											{project.status === 'running' && (
+												<button
+													onClick={() => handleStopProject(project.id)}
+													className="p-2 text-gray-400 hover:text-orange-600 transition-colors"
+													title="Stop Project"
+												>
+													<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+													</svg>
+												</button>
+											)}
 											<button
-												onClick={() => handleDownloadApp(page.id, page.name)}
-												className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-												title="Download"
-											>
-												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-												</svg>
-											</button>
-											<button
-												onClick={() => handleDeleteApp(page.id)}
+												onClick={() => handleDeleteProject(project.id)}
 												className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-												title="Delete"
+												title="Delete Project"
 											>
 												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -272,15 +393,32 @@ export default function MyApps() {
 										</div>
 									</div>
 									
-									<div className="flex items-center justify-between">
-										<span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-											{page.path}
-										</span>
-										<div className="flex items-center text-xs text-gray-500">
-											<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-												<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-											</svg>
-											{new Date(page.created_at).toLocaleTimeString()}
+									<div className="space-y-2">
+										{project.url && (
+											<div className="flex items-center text-sm text-blue-600">
+												<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+												</svg>
+												<a href={project.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+													{project.url}
+												</a>
+											</div>
+										)}
+										{project.error && (
+											<div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+												<strong>Error:</strong> {project.error}
+											</div>
+										)}
+										<div className="flex items-center justify-between text-xs text-gray-500">
+											<span className="bg-gray-100 px-2 py-1 rounded-full">
+												{project.path}
+											</span>
+											<div className="flex items-center">
+												<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+													<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+												</svg>
+												{project.createdAt.toLocaleTimeString()}
+											</div>
 										</div>
 									</div>
 								</div>
@@ -289,7 +427,7 @@ export default function MyApps() {
 					)}
 
 					{/* Create New App CTA */}
-					{!isLoadingPages && pages.length > 0 && (
+					{!isLoadingProjects && projects.length > 0 && (
 						<div className="mt-8 text-center">
 							<a
 								href="/"
